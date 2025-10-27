@@ -1,4 +1,4 @@
-my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices (OneUI 8) also zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of, i just did it here for only for Samsung)
+my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices (OneUI 8) also zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of (i just did it here for only for Samsung, once i get a OnePlus or something i can ditch google and actually own my devices)
 
 i just made this in a few hours so expect bugs, and dont use for production unless you're comfortable with having your font packages have a public keyfile with a viewable password (WIP)
 
