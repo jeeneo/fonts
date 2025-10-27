@@ -1,48 +1,47 @@
 package com.je.fontsmanager.samsung
 
-import android.content.pm.PackageManager
+import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.je.fontsmanager.samsung.ui.MainScreen
-import com.je.fontsmanager.samsung.ui.theme.FontInstallerTheme
 import com.je.fontsmanager.samsung.util.ShizukuAPI
-import rikka.shizuku.Shizuku
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
-    
-    private val shizukuRequestCode = 0
-    
-    private val shizukuPermissionResultListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
-        if (requestCode == shizukuRequestCode) {
-            val granted = grantResult == PackageManager.PERMISSION_GRANTED
-            if (!granted) ShizukuAPI.permissionDenied = true // <- important
-            Toast.makeText(
-                this,
-                if (granted) "Shizuku permission granted" else "Shizuku permission denied",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ShizukuAPI.init(this)
-        try {
-            if (ShizukuAPI.shouldRequestOnStartup() && !Shizuku.isPreV11() && Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
-                Shizuku.requestPermission(shizukuRequestCode)
-            }
-        } catch (e: Exception) {
-        }
-        Shizuku.addRequestPermissionResultListener(shizukuPermissionResultListener)
+        ShizukuAPI.requestPermission(
+            // onGranted = { Toast.makeText(this, "Shizuku ready", Toast.LENGTH_SHORT).show() },
+        )
         enableEdgeToEdge()
-        setContent { FontInstallerTheme { MainScreen() } }
+        setContent {
+            FontInstallerTheme {
+                MainScreen()
+            }
+        }
     }
-    
-    override fun onDestroy() {
-        super.onDestroy()
-        Shizuku.removeRequestPermissionResultListener(shizukuPermissionResultListener)
-    }
+}
+
+@Composable
+fun FontInstallerTheme(content: @Composable () -> Unit) {
+    val context = LocalContext.current
+    val isNightMode = LocalConfiguration.current.isNightModeActive
+    MaterialTheme(
+        colorScheme = if (isNightMode) {
+            dynamicDarkColorScheme(context)
+        } else {
+            dynamicLightColorScheme(context)
+        },
+        content = content
+    )
 }

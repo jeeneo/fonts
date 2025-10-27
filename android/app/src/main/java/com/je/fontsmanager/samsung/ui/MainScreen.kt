@@ -34,6 +34,8 @@ import java.io.File
 import rikka.shizuku.Shizuku
 import java.io.FileOutputStream
 
+import androidx.compose.ui.platform.LocalConfiguration
+
 sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "home")
     object Settings : Screen("settings", "settings")
@@ -79,13 +81,16 @@ fun HomeScreen() {
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
 
-    val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { 
+    val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         scope.launch {
-            delay(500)
-            val pkgName = "com.monotype.android.font.${displayName.replace(Regex("[^a-zA-Z0-9]"), "")}"
-            val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-            Toast.makeText(context, if (installed) "Install succeeded" else "Install failed", Toast.LENGTH_SHORT).show()
             isProcessing = false
+            result?.let {
+                if (it.resultCode == Activity.RESULT_OK) {
+                    val pkgName = "com.monotype.android.font.${displayName.replace(Regex("[^a-zA-Z0-9]"), "")}"
+                    val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
+                    Toast.makeText(context, if (installed) "Install succeeded" else "Install failed", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
@@ -104,7 +109,7 @@ fun HomeScreen() {
                 selectedFontFile = cachedFile
                 selectedFontName = fileName
                 displayName = fileName.removeSuffix(".ttf")
-                Toast.makeText(context, "Font file selected", Toast.LENGTH_SHORT).show()
+                // Toast.makeText(context, "Font file selected", Toast.LENGTH_SHORT).show()
             } else Toast.makeText(context, "Failed to save font file", Toast.LENGTH_SHORT).show()
         }
     }
@@ -120,10 +125,6 @@ fun HomeScreen() {
                 onAlreadyInstalled = {
                     isProcessing = false
                     Toast.makeText(context, "Font already installed. Uninstall it first.", Toast.LENGTH_LONG).show()
-                },
-                onComplete = { success ->
-                    isProcessing = false
-                    if (success) Toast.makeText(context, "Install succeeded", Toast.LENGTH_SHORT).show()
                 }
             )
         }
@@ -203,7 +204,7 @@ fun HomeScreen() {
             Column(Modifier.padding(16.dp)) {
                 Text("Instructions:", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                 Spacer(Modifier.height(8.dp))
-                Text("1. Select a font\n2. Customize display name (optional)\n3. Build & install\n4. Apply in Samsung settings", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                Text("1. Select a font\n2. Customize display name (optional)\n3. Build & install\n4. Apply in Samsung settings\nNote: if certain fonts dont apply, uninstall, restart your device then retry", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         }
     }
@@ -216,10 +217,10 @@ fun SettingsScreen() {
     var installedFonts by remember { mutableStateOf<List<String>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
     var shizukuAvailable by remember { mutableStateOf(ShizukuAPI.isUsable()) }
+
     val filteredFonts = installedFonts.filterNot {
         it.endsWith(".foundation") || it.endsWith(".samsungone") || it.endsWith(".roboto")
     }
-
     fun refreshFonts() {
         scope.launch {
             isRefreshing = true
@@ -228,11 +229,8 @@ fun SettingsScreen() {
             isRefreshing = false
         }
     }
-
     val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshFonts() }
-
     LaunchedEffect(Unit) { refreshFonts() }
-
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -241,9 +239,7 @@ fun SettingsScreen() {
                 Text("Font installer v1.1", style = MaterialTheme.typography.bodyMedium)
             }
         }
-
         Spacer(Modifier.height(16.dp))
-
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -271,7 +267,7 @@ fun SettingsScreen() {
                                 }
                                 IconButton(onClick = {
                                     scope.launch {
-                                        val success = if (ShizukuAPI.shouldUseShizuku()) {
+                                        val success = if (ShizukuAPI.shouldUseShizuku(context)) {
                                             ShizukuAPI.uninstall(pkg)
                                         } else {
                                             val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") }
@@ -302,34 +298,33 @@ fun SettingsScreen() {
         Spacer(Modifier.height(16.dp))
 
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            val context = LocalContext.current
-            val scope = rememberCoroutineScope()
             Column(Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Shizuku", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                val shizukuInstalled = try { rikka.shizuku.Shizuku.pingBinder(); true } catch (e: Exception) { false }
-                var shizukuAuthorized by remember { mutableStateOf(ShizukuAPI.recheckPermission()) }
+                val shizukuInstalled = remember { ShizukuAPI.isInstalled() }
+                var shizukuAuthorized by remember { mutableStateOf(ShizukuAPI.hasPermission()) }
+                
                 val shizukuStatus = when {
                     !shizukuInstalled -> "Shizuku not installed"
                     shizukuAuthorized -> "Authorized"
                     else -> "Permission denied"
                 }
                 Text("Status: $shizukuStatus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+                
                 if (shizukuInstalled && !shizukuAuthorized) {
                     Button(onClick = {
-                        ShizukuAPI.requestPermission()
+                        ShizukuAPI.requestPermission(
+                            onGranted = { 
+                                shizukuAuthorized = true
+                                Toast.makeText(context, "Shizuku connected", Toast.LENGTH_SHORT).show()
+                            },
+                            onDenied = {
+                                shizukuAuthorized = false
+                                Toast.makeText(context, "Start Shizuku first", Toast.LENGTH_SHORT).show()
+                            }
+                        )
                     }) {
                         Text("Request Shizuku permission")
                     }
-                }
-                DisposableEffect(Unit) {
-                    val listener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
-                        if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                            shizukuAuthorized = true
-                            Toast.makeText(context, "Shizuku connected", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                    Shizuku.addRequestPermissionResultListener(listener)
-                    onDispose { Shizuku.removeRequestPermissionResultListener(listener) }
                 }
             }
         }
@@ -369,14 +364,18 @@ object FontInstallerUtils {
                 withContext(Dispatchers.Main) { onAlreadyInstalled() }
                 return@withContext
             }
+
             val outputApk = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
             if (!FontBuilder.buildAndSignFontApk(context, config, outputApk)) {
                 Log.e(TAG, "buildAndSignFontApk failed")
                 withContext(Dispatchers.Main) { onComplete(false) }
                 return@withContext
             }
-            if (ShizukuAPI.shouldUseShizuku()) {
-                val success = ShizukuAPI.install(context, outputApk)
+
+            if (ShizukuAPI.isUsable()) {
+                val success = ShizukuAPI.installApk(outputApk) { fallbackApk ->
+                    ShizukuAPI.fallbackInstall(context, fallbackApk)
+                }
                 delay(500)
                 outputApk.delete()
                 withContext(Dispatchers.Main) { onComplete(success) }
@@ -384,9 +383,10 @@ object FontInstallerUtils {
                 installApk(context, outputApk, installLauncher)
                 delay(2000)
                 outputApk.delete()
+                withContext(Dispatchers.Main) { onComplete(true) }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error building font", e)
+            Log.e(TAG, "Error installing font", e)
             withContext(Dispatchers.Main) { onComplete(false) }
         }
     }
@@ -408,9 +408,4 @@ object FontInstallerUtils {
             putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
         })
     }
-}
-
-@Composable
-fun FontInstallerTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = dynamicLightColorScheme(LocalContext.current), content = content)
 }
