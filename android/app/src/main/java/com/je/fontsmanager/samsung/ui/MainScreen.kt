@@ -9,7 +9,10 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -33,14 +36,38 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import rikka.shizuku.Shizuku
 import java.io.FileOutputStream
-
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.Color
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.Bitmap
+import android.graphics.Typeface as AndroidTypefaceLegacy
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.TextView
+import androidx.compose.ui.graphics.toArgb
+import android.util.TypedValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.platform.LocalDensity
 
 sealed class Screen(val route: String, val title: String) {
     object Home : Screen("home", "home")
     object Settings : Screen("settings", "settings")
 }
 
+private fun sampleText(includeNumbers: Boolean = false): String =
+    if (includeNumbers) "Cwm, fjord-bank glyphs vext quiz\n\n1234567890\n\n!@#$%^&*()_+~" else "The quick brown fox jumps over the lazy dog"
+
+private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, initialText: String = sampleText(false)) =
+    TextView(ctx).apply {
+        text = initialText
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp)
+        setTextColor(textColor)
+    }
 
 @Composable
 fun MainScreen() {
@@ -80,6 +107,9 @@ fun HomeScreen() {
     var displayName by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
+    var showFontPreviewDialog by remember { mutableStateOf(false) }
+    var previewTypeface by remember { mutableStateOf<AndroidTypefaceLegacy?>(null) }
+    var showInstructionsDialog by remember { mutableStateOf(false) }
 
     val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         scope.launch {
@@ -146,68 +176,139 @@ fun HomeScreen() {
         )
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Default.Star, null, Modifier.size(64.dp), tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(16.dp))
-        Text("Font installer", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(32.dp))
-
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                if (selectedFontName != null) {
-                    Text("Selected font", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(4.dp))
-                    Text(selectedFontName!!, style = MaterialTheme.typography.bodyLarge)
-                    Spacer(Modifier.height(8.dp))
-                    Text("Display name: $displayName", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else Text("No font file selected", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Button(onClick = { ttfPicker.launch(arrayOf("font/ttf", "font/*", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
-            Icon(Icons.Default.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Select font (.ttf)")
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        if (selectedFontFile != null) {
-            OutlinedButton(onClick = { showNameDialog = true }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
-                Icon(Icons.Default.Edit, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Display name")
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-
-        FilledTonalButton(onClick = {
-            if (displayName.isBlank()) showNameDialog = true else performInstall()
-        }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing && selectedFontFile != null) {
-            if (isProcessing) {
-                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Building")
-            } else {
-                Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Build and install")
-            }
-        }
-
-        Spacer(Modifier.height(12.dp))
-
-        OutlinedButton(onClick = {
-            val intent = Intent("com.samsung.settings.FontStyleActivity")
-            try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "Cannot open font settings", Toast.LENGTH_SHORT).show() }
-        }, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Default.Settings, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Open font settings")
-        }
-
-        Spacer(Modifier.height(32.dp))
-
-        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text("Instructions:", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                Spacer(Modifier.height(8.dp))
-                Text("1. Select a font\n2. Customize display name (optional)\n3. Build & install\n4. Apply in Samsung settings\nNote: if certain fonts dont apply, uninstall, restart your device then retry", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
+    val appIconBitmap: Bitmap? = remember {
+        val d = context.packageManager.getApplicationIcon(context.applicationInfo)
+        when (d) {
+            is BitmapDrawable -> d.bitmap
+            else -> {
+                val w = d.intrinsicWidth.takeIf { it > 0 } ?: 128
+                val h = d.intrinsicHeight.takeIf { it > 0 } ?: 128
+                Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { bmp ->
+                    android.graphics.Canvas(bmp).apply { d.setBounds(0, 0, w, h); d.draw(this) }
+                }
             }
         }
     }
+
+    LaunchedEffect(selectedFontFile) {
+        selectedFontFile?.let { file ->
+            try {
+                previewTypeface = AndroidTypefaceLegacy.createFromFile(file)
+            } catch (_: Exception) {
+                previewTypeface = null
+            }
+        } ?: run { previewTypeface = null }
+    }
+
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    Box(Modifier.fillMaxSize()) {
+        val configuration = LocalConfiguration.current
+        val screenHeightPx = configuration.screenHeightDp.dp
+        var contentHeightPx by remember { mutableStateOf(0.dp) }
+        val scrollState = rememberScrollState()
+        val density = LocalDensity.current
+
+        Column(
+            Modifier.fillMaxSize().let {
+                if (contentHeightPx > screenHeightPx) it.verticalScroll(scrollState, true) else it
+            }.padding(24.dp).onGloballyPositioned {
+                contentHeightPx = with(density) { it.size.height.toDp() }
+            },
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            if (appIconBitmap != null) Icon(painter = BitmapPainter(appIconBitmap.asImageBitmap()), contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Unspecified)
+            Spacer(Modifier.height(16.dp))
+            Text("Font installer", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(32.dp))
+
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    if (selectedFontName != null) {
+                        Text("Selected font", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.height(4.dp))
+                        Column(Modifier.fillMaxWidth().clickable { showFontPreviewDialog = true }.padding(vertical = 8.dp)) {
+                            Text(selectedFontName!!, style = MaterialTheme.typography.bodyLarge)
+                            Spacer(Modifier.height(8.dp))
+                            if (previewTypeface != null)
+                                AndroidView(factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor) },
+                                    update = { tv -> tv.typeface = previewTypeface; tv.text = sampleText(false); tv.setTextColor(onSurfaceColor) },
+                                    modifier = Modifier.fillMaxWidth())
+                            else Text(sampleText(false), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text("Display name: $displayName", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else Text("No font file selected", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+
+            if (showFontPreviewDialog && previewTypeface != null)
+                Dialog(onDismissRequest = { showFontPreviewDialog = false }) {
+                    Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
+                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Font Preview", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(16.dp))
+                            AndroidView(factory = { ctx -> makeSampleTextView(ctx, 20f, onSurfaceColor, sampleText(true)) },
+                                update = { tv -> tv.typeface = previewTypeface; tv.text = sampleText(true); tv.setTextColor(onSurfaceColor) },
+                                modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(8.dp))
+                            Button(onClick = { showFontPreviewDialog = false }) { Text("Close") }
+                        }
+                    }
+                }
+
+            Spacer(Modifier.height(16.dp))
+            Button(onClick = { ttfPicker.launch(arrayOf("font/ttf", "font/*", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
+                Icon(Icons.Default.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Select font (.ttf)")
+            }
+
+            Spacer(Modifier.height(12.dp))
+            if (selectedFontFile != null) {
+                OutlinedButton(onClick = { showNameDialog = true }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
+                    Icon(Icons.Default.Edit, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Display name")
+                }
+                Spacer(Modifier.height(12.dp))
+            }
+
+            FilledTonalButton(onClick = { if (displayName.isBlank()) showNameDialog = true else performInstall() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isProcessing && selectedFontFile != null
+            ) {
+                if (isProcessing) {
+                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Building")
+                } else {
+                    Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Build and install")
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = {
+                val intent = Intent("com.samsung.settings.FontStyleActivity")
+                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "Cannot open font settings", Toast.LENGTH_SHORT).show() }
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Settings, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Open font settings")
+            }
+
+            Spacer(Modifier.height(32.dp))
+            OutlinedButton(onClick = { showInstructionsDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Info, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Instructions")
+            }
+        }
+
+        if (showInstructionsDialog)
+            Dialog(onDismissRequest = { showInstructionsDialog = false }) {
+                Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
+                    Column(Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Instructions", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.height(8.dp))
+                    Text("1. Select a font\n2. Customize display name (optional)\n3. Build & install\n4. Apply in Samsung settings\n\nNote: if certain fonts don't apply, uninstall, restart your device then retry", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Spacer(Modifier.height(16.dp))
+                    Button(onClick = { showInstructionsDialog = false }) { Text("Close") }
+                }
+            }
+        }
+    }
+
 }
 
 @Composable
@@ -231,6 +332,23 @@ fun SettingsScreen() {
     }
     val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshFonts() }
     LaunchedEffect(Unit) { refreshFonts() }
+    val fontTypefaces = remember { mutableStateMapOf<String, AndroidTypefaceLegacy?>() }
+    LaunchedEffect(installedFonts) {
+        installedFonts.forEach { pkg ->
+            if (!fontTypefaces.containsKey(pkg)) {
+                try {
+                    val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
+                    val apkFile = File(appInfo.sourceDir)
+                    val ttfFile = FontInstallerUtils.extractFontPreview(apkFile, context.cacheDir)
+                    val tf = ttfFile?.let { AndroidTypefaceLegacy.createFromFile(it) }
+                    fontTypefaces[pkg] = tf
+                } catch (_: Exception) {
+                    fontTypefaces[pkg] = null
+                }
+            }
+        }
+    }
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -264,6 +382,21 @@ fun SettingsScreen() {
                                         style = MaterialTheme.typography.bodyLarge
                                     )
                                     Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    val tf = fontTypefaces[pkg]
+                                    if (tf != null) {
+                                        Spacer(Modifier.height(4.dp))
+                                        AndroidView(
+                                            factory = { ctx ->
+                                                makeSampleTextView(ctx, 14f, onSurfaceColor)
+                                            },
+                                            update = { tv ->
+                                                tv.typeface = tf
+                                                tv.text = sampleText(false)
+                                                tv.setTextColor(onSurfaceColor)
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
                                 }
                                 IconButton(onClick = {
                                     scope.launch {
@@ -299,32 +432,34 @@ fun SettingsScreen() {
 
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Shizuku", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                val shizukuInstalled = remember { ShizukuAPI.isInstalled() }
-                var shizukuAuthorized by remember { mutableStateOf(ShizukuAPI.hasPermission()) }
-                
-                val shizukuStatus = when {
-                    !shizukuInstalled -> "Shizuku not installed"
-                    shizukuAuthorized -> "Authorized"
-                    else -> "Permission denied"
-                }
-                Text("Status: $shizukuStatus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
-                
-                if (shizukuInstalled && !shizukuAuthorized) {
+            Text("Shizuku", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+            val shizukuInstalled = remember { ShizukuAPI.isInstalled() }
+            var shizukuAuthorized by remember { mutableStateOf(false) }
+            var shizukuRunning by remember { mutableStateOf(false) }
+            val scope = rememberCoroutineScope()
+            LaunchedEffect(shizukuInstalled) {
+                val running = try { Shizuku.pingBinder() } catch (_: Exception) { false }
+                shizukuRunning = running
+                shizukuAuthorized = if (running) ShizukuAPI.hasPermission() else false
+            }
+            val shizukuStatus = when {
+                !shizukuInstalled -> "Shizuku is not installed"
+                shizukuRunning && shizukuAuthorized -> "Running (authorized)"
+                shizukuRunning -> "Running (unauthorized)"
+                else -> "Not running"
+            }
+            Text("Status: $shizukuStatus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (shizukuInstalled && shizukuRunning && !shizukuAuthorized) {
                     Button(onClick = {
-                        ShizukuAPI.requestPermission(
-                            onGranted = { 
-                                shizukuAuthorized = true
-                                Toast.makeText(context, "Shizuku connected", Toast.LENGTH_SHORT).show()
-                            },
-                            onDenied = {
-                                shizukuAuthorized = false
-                                Toast.makeText(context, "Start Shizuku first", Toast.LENGTH_SHORT).show()
-                            }
-                        )
-                    }) {
-                        Text("Request Shizuku permission")
-                    }
+                    ShizukuAPI.requestPermission(
+                    onGranted = {
+                    shizukuAuthorized = true
+                    Toast.makeText(context, "Permission granted", Toast.LENGTH_SHORT).show()},
+                    onDenied = {
+                    shizukuAuthorized = false
+                    Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show()})})
+                    { Text("Request permission")}}
                 }
             }
         }
@@ -371,7 +506,6 @@ object FontInstallerUtils {
                 withContext(Dispatchers.Main) { onComplete(false) }
                 return@withContext
             }
-
             if (ShizukuAPI.isUsable()) {
                 val success = ShizukuAPI.installApk(outputApk) { fallbackApk ->
                     ShizukuAPI.fallbackInstall(context, fallbackApk)
@@ -407,5 +541,21 @@ object FontInstallerUtils {
             putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
         })
+    }
+
+    fun extractFontPreview(apkFile: File, cacheDir: File): File? {
+        return try {
+            val zip = java.util.zip.ZipFile(apkFile)
+            val entry = zip.entries().asSequence().firstOrNull { it.name.endsWith(".ttf", ignoreCase = true) }
+            if (entry != null) {
+                val outFile = File(cacheDir, "font_preview_${apkFile.nameWithoutExtension}_${System.currentTimeMillis()}.ttf")
+                zip.getInputStream(entry).use { input ->
+                    FileOutputStream(outFile).use { output -> input.copyTo(output) }
+                }
+                outFile
+            } else null
+        } catch (_: Exception) {
+            null
+        }
     }
 }

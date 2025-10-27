@@ -20,9 +20,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         ShizukuAPI.init(this)
-        ShizukuAPI.requestPermission(
-            // onGranted = { Toast.makeText(this, "Shizuku ready", Toast.LENGTH_SHORT).show() },
-        )
+        if (ShizukuAPI.shouldUseShizuku(this)) {
+            ShizukuAPI.requestPermission(
+                // onGranted = { Toast.makeText(this, "Shizuku ready", Toast.LENGTH_SHORT).show() },
+            )
+        }
         enableEdgeToEdge()
         setContent {
             FontInstallerTheme {

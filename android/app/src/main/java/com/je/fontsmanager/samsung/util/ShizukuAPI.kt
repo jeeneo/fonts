@@ -23,7 +23,18 @@ object ShizukuAPI {
 
     private fun context() = appContext ?: throw IllegalStateException("Call init() first")
 
-    fun shouldUseShizuku(context: Context): Boolean = isUsable()
+    fun shouldUseShizuku(context: Context): Boolean =
+        isUsable() && !isPermissionDenied()
+
+    private fun isPermissionDenied(): Boolean {
+        val prefs = context().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_PERMISSION_DENIED, false)
+    }
+
+    private fun setPermissionDenied(denied: Boolean) {
+        val prefs = context().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit { putBoolean(KEY_PERMISSION_DENIED, denied) }
+    }
 
     fun isInstalled(): Boolean = try {
         context().packageManager.getPackageInfo("moe.shizuku.privileged.api", 0)
@@ -38,23 +49,39 @@ object ShizukuAPI {
 
     fun isUsable(): Boolean = isInstalled() && isRunning() && hasPermission()
 
-    fun requestPermission(requestCode: Int = 1001, onGranted: (() -> Unit)? = null, onDenied: (() -> Unit)? = null) {
+    fun requestPermission(
+        requestCode: Int = 1001,
+        onGranted: (() -> Unit)? = null,
+        onDenied: (() -> Unit)? = null
+    ) {
         if (!isInstalled()) {
+            setPermissionDenied(true)
             onDenied?.invoke()
             return
         }
         if (!isRunning()) {
+            setPermissionDenied(true)
             onDenied?.invoke()
             return
         }
         if (hasPermission()) {
+            setPermissionDenied(false)
             onGranted?.invoke()
+            return
+        }
+        if (isPermissionDenied()) {
+            onDenied?.invoke()
             return
         }
         Shizuku.requestPermission(requestCode)
         Shizuku.addRequestPermissionResultListener { _, grantResult ->
-            if (grantResult == PackageManager.PERMISSION_GRANTED) onGranted?.invoke()
-            else onDenied?.invoke()
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                setPermissionDenied(false)
+                onGranted?.invoke()
+            } else {
+                setPermissionDenied(true)
+                onDenied?.invoke()
+            }
         }
     }
 
