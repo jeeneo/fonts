@@ -155,6 +155,12 @@ fun HomeScreen() {
                 onAlreadyInstalled = {
                     isProcessing = false
                     Toast.makeText(context, "Font already installed. Uninstall it first.", Toast.LENGTH_LONG).show()
+                },
+                onComplete = { success ->
+                    isProcessing = false
+                    val pkgName = "com.monotype.android.font.${displayName.replace(Regex("[^a-zA-Z0-9]"), "")}"
+                    val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
+                    Toast.makeText(context, if (installed && success) "Install succeeded" else "Install failed", Toast.LENGTH_SHORT).show()
                 }
             )
         }

@@ -21,4 +21,5 @@
 #-renamesourcefileattribute SourceFile
 
 -keep class com.android.apksig.** { *; }
+# -keep class dev.rikka.shizuku.** { *; }
 -keep class com.je.fontsmanager.samsung.builder.** { *; }
