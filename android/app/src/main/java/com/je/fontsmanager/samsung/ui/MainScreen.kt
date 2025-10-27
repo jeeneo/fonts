@@ -5,13 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -29,10 +25,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.je.fontsmanager.samsung.builder.FontBuilder
+import com.je.fontsmanager.samsung.util.ShizukuAPI
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import rikka.shizuku.Shizuku
 import java.io.FileOutputStream
 
 sealed class Screen(val route: String, val title: String) {
@@ -40,13 +39,6 @@ sealed class Screen(val route: String, val title: String) {
     object Settings : Screen("settings", "settings")
 }
 
-class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent { FontInstallerTheme { MainScreen() } }
-    }
-}
 
 @Composable
 fun MainScreen() {
@@ -87,16 +79,14 @@ fun HomeScreen() {
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
 
-    val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        when (result.resultCode) {
-            Activity.RESULT_OK -> Toast.makeText(context, "Install succeeded", Toast.LENGTH_SHORT).show()
-            Activity.RESULT_CANCELED -> Toast.makeText(context, "Install canceled.", Toast.LENGTH_LONG).show()
-            else -> {
-                Log.e("FontInstaller", "Install failed with unknown result code: ${result.resultCode}")
-                Toast.makeText(context, "Install failed with code ${result.resultCode}", Toast.LENGTH_LONG).show()
-            }
+    val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { 
+        scope.launch {
+            delay(500)
+            val pkgName = "com.monotype.android.font.${displayName.replace(Regex("[^a-zA-Z0-9]"), "")}"
+            val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
+            Toast.makeText(context, if (installed) "Install succeeded" else "Install failed", Toast.LENGTH_SHORT).show()
+            isProcessing = false
         }
-        isProcessing = false
     }
 
     val ttfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -119,6 +109,26 @@ fun HomeScreen() {
         }
     }
 
+    fun performInstall() {
+        scope.launch {
+            isProcessing = true
+            FontInstallerUtils.buildAndInstallFont(
+                context,
+                selectedFontFile!!,
+                displayName,
+                installLauncher,
+                onAlreadyInstalled = {
+                    isProcessing = false
+                    Toast.makeText(context, "Font already installed. Uninstall it first.", Toast.LENGTH_LONG).show()
+                },
+                onComplete = { success ->
+                    isProcessing = false
+                    if (success) Toast.makeText(context, "Install succeeded", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
@@ -129,13 +139,7 @@ fun HomeScreen() {
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showNameDialog = false
-                    scope.launch {
-                        isProcessing = true
-                        FontInstallerUtils.buildAndInstallFont(context, selectedFontFile!!, displayName, installLauncher)
-                    }
-                }, enabled = displayName.isNotBlank()) { Text("Install") }
+                TextButton(onClick = { showNameDialog = false; performInstall() }, enabled = displayName.isNotBlank()) { Text("Install") }
             },
             dismissButton = { TextButton(onClick = { showNameDialog = false }) { Text("Cancel") } }
         )
@@ -175,10 +179,7 @@ fun HomeScreen() {
         }
 
         FilledTonalButton(onClick = {
-            if (displayName.isBlank()) showNameDialog = true else scope.launch {
-                isProcessing = true
-                FontInstallerUtils.buildAndInstallFont(context, selectedFontFile!!, displayName, installLauncher)
-            }
+            if (displayName.isBlank()) showNameDialog = true else performInstall()
         }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing && selectedFontFile != null) {
             if (isProcessing) {
                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Building")
@@ -211,65 +212,126 @@ fun HomeScreen() {
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var installedFonts by remember { mutableStateOf<List<String>>(emptyList()) }
-    val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        when (result.resultCode) {
-            Activity.RESULT_OK -> Toast.makeText(context, "Uninstall succeeded", Toast.LENGTH_SHORT).show()
-            Activity.RESULT_CANCELED -> Toast.makeText(context, "Uninstall canceled", Toast.LENGTH_SHORT).show()
-            else -> Toast.makeText(context, "Uninstall failed", Toast.LENGTH_SHORT).show()
-        }
-        installedFonts = FontInstallerUtils.getInstalledCustomFonts(context)
+    var isRefreshing by remember { mutableStateOf(false) }
+    var shizukuAvailable by remember { mutableStateOf(ShizukuAPI.isUsable()) }
+    val filteredFonts = installedFonts.filterNot {
+        it.endsWith(".foundation") || it.endsWith(".samsungone") || it.endsWith(".roboto")
     }
 
-    LaunchedEffect(Unit) { installedFonts = FontInstallerUtils.getInstalledCustomFonts(context) }
+    fun refreshFonts() {
+        scope.launch {
+            isRefreshing = true
+            delay(300)
+            installedFonts = FontInstallerUtils.getInstalledCustomFonts(context)
+            isRefreshing = false
+        }
+    }
+
+    val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshFonts() }
+
+    LaunchedEffect(Unit) { refreshFonts() }
 
     Column(Modifier.fillMaxSize().padding(24.dp)) {
         Text("Settings", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
-
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("About", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                Text("Font installer v1.0", style = MaterialTheme.typography.bodyMedium)
+                Text("Font installer v1.1", style = MaterialTheme.typography.bodyMedium)
             }
         }
 
         Spacer(Modifier.height(16.dp))
-        Text("Installed fonts", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 16.dp))
 
-        val filteredFonts = installedFonts.filterNot {
-            it.endsWith(".foundation") || it.endsWith(".samsungone") || it.endsWith(".roboto") // should only have these 3? maybe/not
-        }
-
-        if (filteredFonts.isNotEmpty()) {
-            filteredFonts.forEach { pkg ->
-                ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                pkg.substringAfterLast(".").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                            Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        IconButton(onClick = {
-                            val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") }
-                            uninstallLauncher.launch(intent)
-                        }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Uninstall", tint = MaterialTheme.colorScheme.error)
-                        }
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Installed fonts", style = MaterialTheme.typography.titleMedium)
+                    Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        if (isRefreshing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        else IconButton(onClick = { refreshFonts() }) { Icon(Icons.Default.Refresh, "Refresh") }
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                if (filteredFonts.isNotEmpty()) {
+                    filteredFonts.forEach { pkg ->
+                        ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        pkg.substringAfterLast(".").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() },
+                                        style = MaterialTheme.typography.bodyLarge
+                                    )
+                                    Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        val success = if (ShizukuAPI.shouldUseShizuku()) {
+                                            ShizukuAPI.uninstall(pkg)
+                                        } else {
+                                            val intent = Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") }
+                                            uninstallLauncher.launch(intent)
+                                            null
+                                        }
+                                        success?.let {
+                                            Toast.makeText(context, if (it) "Uninstalled" else "Uninstall failed", Toast.LENGTH_SHORT).show()
+                                            if (it) refreshFonts()
+                                        }
+                                    }
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Uninstall", tint = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Text(
+                        "No custom fonts installed",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-        } else {
-            Text(
-                "No custom fonts installed",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            val context = LocalContext.current
+            val scope = rememberCoroutineScope()
+            Column(Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Shizuku", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                val shizukuInstalled = try { rikka.shizuku.Shizuku.pingBinder(); true } catch (e: Exception) { false }
+                var shizukuAuthorized by remember { mutableStateOf(ShizukuAPI.recheckPermission()) }
+                val shizukuStatus = when {
+                    !shizukuInstalled -> "Shizuku not installed"
+                    shizukuAuthorized -> "Authorized"
+                    else -> "Permission denied"
+                }
+                Text("Status: $shizukuStatus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+                if (shizukuInstalled && !shizukuAuthorized) {
+                    Button(onClick = {
+                        ShizukuAPI.requestPermission()
+                    }) {
+                        Text("Request Shizuku permission")
+                    }
+                }
+                DisposableEffect(Unit) {
+                    val listener = Shizuku.OnRequestPermissionResultListener { _, grantResult ->
+                        if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                            shizukuAuthorized = true
+                            Toast.makeText(context, "Shizuku connected", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    Shizuku.addRequestPermissionResultListener(listener)
+                    onDispose { Shizuku.removeRequestPermissionResultListener(listener) }
+                }
+            }
         }
     }
 }
@@ -292,30 +354,56 @@ object FontInstallerUtils {
             .map { it.packageName }
     } catch (e: Exception) { Log.e(TAG, "Failed to get installed fonts", e); emptyList() }
 
-    suspend fun buildAndInstallFont(context: Context, ttfFile: File, displayName: String, installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>) =
-        withContext(Dispatchers.IO) {
-            try {
-                val fontName = displayName.replace(Regex("[^a-zA-Z0-9]"), "")
-                val config = FontBuilder.FontConfig(displayName = displayName, fontName = fontName, ttfFile = ttfFile)
-                if (isAppInstalled(context, config.packageName)) return@withContext
-
-                val outputApk = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
-                if (!FontBuilder.buildAndSignFontApk(context, config, outputApk)) { Log.e(TAG, "buildAndSignFontApk failed"); return@withContext }
-
-                try { installApk(context, outputApk, installLauncher) } catch (e: Exception) { Log.e(TAG, "APK install failed", e) }
-                kotlinx.coroutines.delay(2000); if (outputApk.exists()) outputApk.delete()
-            } catch (e: Exception) { Log.e(TAG, "Error building font", e) }
+    suspend fun buildAndInstallFont(
+        context: Context,
+        ttfFile: File,
+        displayName: String,
+        installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
+        onAlreadyInstalled: () -> Unit,
+        onComplete: (Boolean) -> Unit = {}
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val fontName = displayName.replace(Regex("[^a-zA-Z0-9]"), "")
+            val config = FontBuilder.FontConfig(displayName = displayName, fontName = fontName, ttfFile = ttfFile)
+            if (isAppInstalled(context, config.packageName)) {
+                withContext(Dispatchers.Main) { onAlreadyInstalled() }
+                return@withContext
+            }
+            val outputApk = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
+            if (!FontBuilder.buildAndSignFontApk(context, config, outputApk)) {
+                Log.e(TAG, "buildAndSignFontApk failed")
+                withContext(Dispatchers.Main) { onComplete(false) }
+                return@withContext
+            }
+            if (ShizukuAPI.shouldUseShizuku()) {
+                val success = ShizukuAPI.install(context, outputApk)
+                delay(500)
+                outputApk.delete()
+                withContext(Dispatchers.Main) { onComplete(success) }
+            } else {
+                installApk(context, outputApk, installLauncher)
+                delay(2000)
+                outputApk.delete()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error building font", e)
+            withContext(Dispatchers.Main) { onComplete(false) }
         }
+    }
 
-    private fun isAppInstalled(context: Context, packageName: String): Boolean = try {
-        context.packageManager.getPackageInfo(packageName, PackageManager.GET_META_DATA); true
-    } catch (e: PackageManager.NameNotFoundException) { false }
+    fun isAppInstalled(context: Context, packageName: String): Boolean = try {
+        context.packageManager.getPackageInfo(packageName, PackageManager.GET_META_DATA)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
 
     private fun installApk(context: Context, apkFile: File, installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>) {
         if (!apkFile.exists() || apkFile.length() == 0L) return
         val apkUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
         installLauncher.launch(Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            data = apkUri; flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+            data = apkUri
+            flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
             putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
             putExtra(Intent.EXTRA_INSTALLER_PACKAGE_NAME, context.packageName)
         })

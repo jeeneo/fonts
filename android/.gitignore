@@ -7,4 +7,4 @@
 .cxx
 local.properties
 /.kotlin
-/.idea/*
+.idea

@@ -19,6 +19,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    sourceSets {
+        getByName("main") {
+            java.srcDirs("src/main/java")
+            res.srcDirs("src/main/res")
+            aidl.srcDirs("src/main/aidl") // this is the correct syntax
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -53,7 +61,9 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.5")
     implementation("com.android.tools.build:apksig:8.13.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+        
     // testImplementation(libs.junit)
     // androidTestImplementation(libs.androidx.junit)
     // androidTestImplementation(libs.androidx.espresso.core)

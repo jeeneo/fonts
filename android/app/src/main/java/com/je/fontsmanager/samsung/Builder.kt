@@ -29,7 +29,7 @@ object FontBuilder {
         val ttfFile: File
     ) {
         val packageName: String
-            get() = "com.monotype.android.font.$fontName" // probably can be literaly any package name i think so check later
+            get() = "com.monotype.android.font.$fontName"
         val ttfFileName: String
             get() = "$fontName.ttf"
         val xmlFileName: String
@@ -75,13 +75,13 @@ object FontBuilder {
             extractDir.mkdirs()
             unzipApk(templateApk, extractDir)
             val manifestFile = File(extractDir, "AndroidManifest.xml")
-            patchBinaryXmlString(
+            patchXML(
                 manifestFile,
                 "com.monotype.android.font.PLACEHOLDER_FONT_NAME_HI_I_SUCK_AT_MAKING_APPS_SPACE_SPACE",
                 config.packageName
             )
             val resourcesFile = File(extractDir, "resources.arsc")
-            patchResourcesArsc(
+            patchARSC(
                 resourcesFile,
                 "PLACEHOLDER_FONT_DISPLAY_NAME_LONG_STRING_HERE_SPACE_SPACE_SPACE",
                 config.displayName
@@ -123,13 +123,12 @@ object FontBuilder {
             .sign()
     }
 
-    private fun patchResourcesArsc(file: File, oldPlaceholder: String, newValue: String) {
+    private fun patchARSC(file: File, oldPlaceholder: String, newValue: String) {
         val bytes = file.readBytes()
         val u8Old = oldPlaceholder.toByteArray(Charsets.UTF_8)
         val u8New = newValue.toByteArray(Charsets.UTF_8)
         val u16Old = oldPlaceholder.toByteArray(Charsets.UTF_16LE)
         val u16New = newValue.toByteArray(Charsets.UTF_16LE)
-
         fun ByteArray.indexOfSub(arr: ByteArray): Int {
             if (arr.isEmpty() || arr.size > size) return -1
             outer@ for (i in 0..(size - arr.size)) {
@@ -158,7 +157,7 @@ object FontBuilder {
         Log.w(TAG, "placeholder not found in resources.arsc: $oldPlaceholder")
     }
 
-    private fun patchBinaryXmlString(file: File, oldString: String, newString: String) {
+    private fun patchXML(file: File, oldString: String, newString: String) {
         try {
             val bytes = file.readBytes()
             val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
@@ -172,7 +171,7 @@ object FontBuilder {
                 Log.e(TAG, "Not enough data for string pool header")
                 return
             }
-            val chunkType = buffer.getInt() // 0x001C0001
+            val chunkType = buffer.getInt()
             if (chunkType != 0x001C0001) {
                 Log.e(TAG, "String pool not found, chunk type: ${chunkType.toString(16)}")
                 return
@@ -208,17 +207,13 @@ object FontBuilder {
                     continue
                 }
                 val currentString = try {
-                    if (isUtf8) {
-                        readUtf8String(buffer)
-                    } else {
-                        readUtf16String(buffer)
-                    }
+                    readString(buffer, isUtf8)
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to read string $i: ${e.message}")
                     continue
                 }
+
                 Log.d(TAG, "String $i: '$currentString'")
-                
                 if (currentString == oldString) {
                     Log.d(TAG, "Found target string at position $stringPos, replacing with: $newString")
                     if (newString.length > oldString.length) {
@@ -226,11 +221,7 @@ object FontBuilder {
                         return
                     }
                     buffer.position(stringPos)
-                    if (isUtf8) {
-                        writeUtf8String(buffer, newString, bytes)
-                    } else {
-                        writeUtf16String(buffer, newString, bytes)
-                    }
+                    writeString(buffer, newString, bytes, isUtf8)
                     file.writeBytes(bytes)
                     Log.d(TAG, "patched manifest")
                     return
@@ -242,78 +233,68 @@ object FontBuilder {
         }
     }
     
-    private fun readUtf8String(buffer: ByteBuffer): String {
+    private fun readString(buffer: ByteBuffer, isUtf8: Boolean): String {
         if (buffer.remaining() < 2) throw BufferUnderflowException()
-        val len1 = buffer.get().toInt() and 0xFF
-        val len2 = buffer.get().toInt() and 0xFF
-        val length = if (len1 and 0x80 != 0) {
-            ((len1 and 0x7F) shl 8) or len2
+        return if (isUtf8) {
+            val len1 = buffer.get().toInt() and 0xFF
+            val len2 = buffer.get().toInt() and 0xFF
+            val length = if (len1 and 0x80 != 0) {
+                ((len1 and 0x7F) shl 8) or len2
+            } else {
+                buffer.position(buffer.position() - 1)
+                len1
+            }
+            if (buffer.remaining() < length) throw BufferUnderflowException()
+            val strBytes = ByteArray(length)
+            buffer.get(strBytes)
+            if (buffer.hasRemaining() && buffer.get(buffer.position()) == 0.toByte()) {
+                buffer.get()
+            }
+            String(strBytes, Charsets.UTF_8)
         } else {
-            buffer.position(buffer.position() - 1)
-            len1
+            val length = buffer.getShort().toInt() and 0xFFFF
+            if (length == 0) return ""
+            if (buffer.remaining() < length * 2) throw BufferUnderflowException()
+            val chars = CharArray(length)
+            for (i in 0 until length) { chars[i] = buffer.getShort().toInt().toChar()}
+            if (buffer.remaining() >= 2 && buffer.getShort(buffer.position()) == 0.toShort()) { buffer.getShort()}
+            String(chars)
         }
-        if (buffer.remaining() < length) {
-            throw BufferUnderflowException()
-        }
-        val strBytes = ByteArray(length)
-        buffer.get(strBytes)
-        if (buffer.hasRemaining() && buffer.get(buffer.position()) == 0.toByte()) {
-            buffer.get()
-        }
-        return String(strBytes, Charsets.UTF_8)
     }
-    
-    private fun readUtf16String(buffer: ByteBuffer): String {
-        if (buffer.remaining() < 2) throw BufferUnderflowException()
-        val length = buffer.getShort().toInt() and 0xFFFF
-        if (length == 0) return ""
-        if (buffer.remaining() < length * 2) {
-            throw BufferUnderflowException()
-        }
-        val chars = CharArray(length)
-        for (i in 0 until length) {
-            chars[i] = buffer.getShort().toInt().toChar()
-        }
-        if (buffer.remaining() >= 2 && buffer.getShort(buffer.position()) == 0.toShort()) {
-            buffer.getShort()
-        }
-        return String(chars)
-    }
-    
-    private fun writeUtf8String(buffer: ByteBuffer, string: String, bytes: ByteArray) {
+
+    private fun writeString(buffer: ByteBuffer, string: String, bytes: ByteArray, isUtf8: Boolean) {
         val pos = buffer.position()
-        val strBytes = string.toByteArray(Charsets.UTF_8) 
-        if (strBytes.size < 128) {
-            bytes[pos] = strBytes.size.toByte()
-            bytes[pos + 1] = strBytes.size.toByte()
-            System.arraycopy(strBytes, 0, bytes, pos + 2, strBytes.size)
-            bytes[pos + 2 + strBytes.size] = 0 // Null terminator
+        if (isUtf8) {
+            val strBytes = string.toByteArray(Charsets.UTF_8)
+            if (strBytes.size < 128) {
+                bytes[pos] = strBytes.size.toByte()
+                bytes[pos + 1] = strBytes.size.toByte()
+                System.arraycopy(strBytes, 0, bytes, pos + 2, strBytes.size)
+                bytes[pos + 2 + strBytes.size] = 0
+            } else {
+                val len = strBytes.size
+                bytes[pos] = (0x80 or (len shr 8)).toByte()
+                bytes[pos + 1] = (len and 0xFF).toByte()
+                bytes[pos + 2] = len.toByte()
+                System.arraycopy(strBytes, 0, bytes, pos + 3, strBytes.size)
+                bytes[pos + 3 + strBytes.size] = 0
+            }
         } else {
-            val len = strBytes.size
-            bytes[pos] = (0x80 or (len shr 8)).toByte()
-            bytes[pos + 1] = (len and 0xFF).toByte()
-            bytes[pos + 2] = len.toByte()
-            System.arraycopy(strBytes, 0, bytes, pos + 3, strBytes.size)
-            bytes[pos + 3 + strBytes.size] = 0
+            val length = string.length
+            bytes[pos] = (length and 0xFF).toByte()
+            bytes[pos + 1] = (length shr 8).toByte()
+            var offset = pos + 2
+            for (char in string) {
+                bytes[offset] = (char.code and 0xFF).toByte()
+                bytes[offset + 1] = (char.code shr 8).toByte()
+                offset += 2
+            }
+            bytes[offset] = 0
+            bytes[offset + 1] = 0
         }
     }
-    
-    private fun writeUtf16String(buffer: ByteBuffer, string: String, bytes: ByteArray) {
-        val pos = buffer.position()
-        val length = string.length
-        bytes[pos] = (length and 0xFF).toByte()
-        bytes[pos + 1] = (length shr 8).toByte()
-        var offset = pos + 2
-        for (char in string) {
-            bytes[offset] = (char.code and 0xFF).toByte()
-            bytes[offset + 1] = (char.code shr 8).toByte()
-            offset += 2
-        }
-        bytes[offset] = 0
-        bytes[offset + 1] = 0
-    }
-    
-    private fun createFontXml(file: File, config: FontConfig) {
+
+    private fun createFontXml(file: File, config: FontConfig) { 
         val fontXml = """<?xml version="1.0" encoding="utf-8"?>
 <font displayname="${config.displayName}">
     <sans>
@@ -335,7 +316,6 @@ object FontBuilder {
             var entry = zis.nextEntry
             while (entry != null) {
                 val file = File(destDir, entry.name)
-                
                 if (entry.isDirectory) {
                     file.mkdirs()
                 } else {
@@ -344,7 +324,6 @@ object FontBuilder {
                         zis.copyTo(fos)
                     }
                 }
-                
                 zis.closeEntry()
                 entry = zis.nextEntry
             }
@@ -356,9 +335,7 @@ object FontBuilder {
             sourceDir.walkTopDown().forEach { file ->
                 val relativePath = sourceDir.toPath().relativize(file.toPath()).toString().replace("\\", "/")
                 if (relativePath.isEmpty()) return@forEach
-
                 val zipEntry = ZipEntry(if (file.isDirectory) "$relativePath/" else relativePath)
-
                 if (file.isFile) {
                     val bytes = file.readBytes()
                     zipEntry.method = ZipEntry.STORED
@@ -376,7 +353,6 @@ object FontBuilder {
                     zipEntry.crc = 0
                     zos.putNextEntry(zipEntry)
                 }
-
                 zos.closeEntry()
             }
         }
