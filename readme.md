@@ -1,6 +1,6 @@
-## OneUI 8 font changer
+## OneUI rootless 8 font changer
 
-my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices (OneUI 8)
+my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices without root (OneUI 8)
 
 zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of, i just did it here for only for Samsung, other devices not supported)
 
