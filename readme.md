@@ -1,11 +1,13 @@
-my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices (OneUI 8) also zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of, i just did it here for only for Samsung, once i get a OnePlus or something i can ditch google and actually own my devices)
+## OneUI 8 font changer
 
-i just made this in a few hours so expect bugs, and dont use for production unless you're comfortable with having your font packages have a public keyfile with a viewable password (WIP)
+my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices (OneUI 8)
+
+zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of, i just did it here for only for Samsung, other devices not supported)
 
 its kinda thrown together (look its text replacement instead of apk decompiling)
 
-check out [template.apk](https://github.com/jeeneo/fonts/blob/main/android/app/src/main/assets/template.apk) to see how it works, its based off of the SamsungSans apk, its not obfuscated and youre free to decompile it, i just use search-and-replace patching is all. I attempted to embed aapt2 but that failed. you can create it yourself by extracting the SamsungSans apk, editing resources.arsc and AndroidManifest.xml with the placeholder values (app_name/package ID), deleting the assets folder and saving
+check out [template.apk](https://github.com/jeeneo/fonts/blob/main/android/app/src/main/assets/template.apk) to see how it works, its based off of the SamsungSans apk, its not obfuscated and youre free to decompile it, i just use search-and-replace patching is all. I attempted to embed aapt2 but that failed. you can create it yourself by extracting the SamsungSans apk, editing resources.arsc and AndroidManifest.xml with the placeholder values (app_name/package ID), deleting the assets folder and saving. It's using a generic keyfile to sign apks so be warned.
 
-debug apk in release
+apk in release
 
-supports shizuku now i guess
+supports shizuku

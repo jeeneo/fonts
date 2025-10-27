@@ -64,6 +64,4 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
-    implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.core:core:1.17.0")
 }
