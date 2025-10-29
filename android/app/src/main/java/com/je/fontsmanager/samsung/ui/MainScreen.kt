@@ -331,7 +331,6 @@ fun SettingsScreen() {
     fun refreshFonts() {
         scope.launch {
             isRefreshing = true
-            delay(300)
             installedFonts = FontInstallerUtils.getInstalledCustomFonts(context)
             isRefreshing = false
         }

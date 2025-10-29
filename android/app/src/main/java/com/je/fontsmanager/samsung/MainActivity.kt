@@ -6,6 +6,8 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.activity.compose.setContent
 import com.je.fontsmanager.samsung.ui.MainScreen
 import com.je.fontsmanager.samsung.util.ShizukuAPI
 import androidx.compose.material3.MaterialTheme
@@ -14,6 +16,8 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.SideEffect
+import androidx.activity.SystemBarStyle
 
 class MainActivity : ComponentActivity() {
 
@@ -27,6 +31,27 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         setContent {
+            val isDarkTheme = isSystemInDarkTheme()
+            SideEffect {
+                if (!isDarkTheme) {
+                    val lightTransparentStyle = SystemBarStyle.light(
+                        scrim = android.graphics.Color.TRANSPARENT,
+                        darkScrim = android.graphics.Color.TRANSPARENT
+                    )
+                    enableEdgeToEdge(
+                        statusBarStyle = lightTransparentStyle,
+                        navigationBarStyle = lightTransparentStyle
+                    )
+                } else {
+                    val darkTransparentStyle = SystemBarStyle.dark(
+                        scrim = android.graphics.Color.TRANSPARENT
+                    )
+                    enableEdgeToEdge(
+                        statusBarStyle = darkTransparentStyle,
+                        navigationBarStyle = darkTransparentStyle
+                    )
+                }
+            }
             FontInstallerTheme {
                 MainScreen()
             }
