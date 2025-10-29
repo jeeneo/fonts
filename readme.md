@@ -1,4 +1,4 @@
-## OneUI 8 rootless font changer
+## One UI 8 rootless font changer
 
 my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices without root (OneUI 8)
 
