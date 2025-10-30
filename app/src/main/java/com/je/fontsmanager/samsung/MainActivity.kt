@@ -23,6 +23,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        cleanupCache()
         ShizukuAPI.init(this)
         if (ShizukuAPI.shouldUseShizuku(this)) {
             ShizukuAPI.requestPermission(
@@ -55,6 +56,21 @@ class MainActivity : ComponentActivity() {
             FontInstallerTheme {
                 MainScreen()
             }
+        }
+    }
+    
+    private fun cleanupCache() {
+        try {
+            cacheDir.listFiles()?.forEach { file ->
+                when {
+                    file.name.startsWith("temp_") && file.name.endsWith(".ttf") -> file.delete()
+                    file.name.startsWith("signed_") && file.name.endsWith(".apk") -> file.delete()
+                    file.name.startsWith("apk_build_") && file.isDirectory -> file.deleteRecursively()
+                    file.name.startsWith("font_preview_") && file.name.endsWith(".ttf") -> file.delete()
+                }
+            }
+        } catch (e: Exception) {
+            // ignore
         }
     }
 }
