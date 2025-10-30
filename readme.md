@@ -1,9 +1,6 @@
 ## One UI 8 rootless font changer
 
 <div align="center">
-  <br>
-  Install custom fonts on One UI 8 without root
-  <h2></h2>
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
        style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" 
