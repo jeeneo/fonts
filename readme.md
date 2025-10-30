@@ -1,9 +1,6 @@
 ## One UI 8 rootless font changer
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/6d1e6fde-58b6-4991-9bb3-57b64627fbcf" height="140" alt="">
-  <br>
-  An open source app for removing noise and compression from photos
   <h2></h2>
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
        style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
