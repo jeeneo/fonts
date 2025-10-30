@@ -6,7 +6,7 @@ zFont sucks with its ADS (it seems like its the only other app that can do this 
 
 its kinda thrown together (look its text replacement instead of apk decompiling)
 
-check out [template.apk](https://github.com/jeeneo/fonts/blob/main/android/app/src/main/assets/template.apk) to see how it works, its based off of the SamsungSans apk, its not obfuscated and youre free to decompile it, i just use search-and-replace patching is all. I attempted to embed aapt2 but that failed. you can create it yourself by extracting the SamsungSans apk, editing resources.arsc and AndroidManifest.xml with the placeholder values (app_name/package ID), deleting the assets folder and saving. It's using a generic keyfile to sign apks so be warned.
+basically an unsigned stub apk is built alongside then search-and-replacement is used to change the name and ID
 
 apk in release
 

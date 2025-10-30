@@ -8,3 +8,5 @@
 local.properties
 /.kotlin
 .idea
+app/src/main/assets/template.apk
+/app/build
