@@ -65,3 +65,14 @@ dependencies {
     implementation("dev.rikka.shizuku:api:13.1.5")
     implementation("dev.rikka.shizuku:provider:13.1.5")
 }
+
+tasks.register<Copy>("copyTemplateApk") {
+    dependsOn(":template:assembleRelease")
+    from(project(":template").layout.buildDirectory.file("outputs/apk/release/template-release-unsigned.apk"))
+    into(layout.projectDirectory.dir("src/main/assets"))
+    rename { "template.apk" }
+}
+
+tasks.named("preBuild") {
+    dependsOn("copyTemplateApk")
+}

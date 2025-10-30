@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Fonts"
 include(":app")
+include(":template")

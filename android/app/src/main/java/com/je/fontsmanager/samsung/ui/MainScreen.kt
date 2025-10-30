@@ -359,7 +359,7 @@ fun SettingsScreen() {
         ElevatedCard(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
                 Text("About", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                Text("Font installer v1.1", style = MaterialTheme.typography.bodyMedium)
+                Text("Font installer v1.2", style = MaterialTheme.typography.bodyMedium)
             }
         }
         Spacer(Modifier.height(16.dp))
