@@ -1,0 +1,5 @@
+<p>Install fonts on Samsung devices running One UI 8 without root</p>
+
+<p>This is a rootless font installer for Samsung devices running One UI 8. One UI 7, prior versions, and other devices are not supported.</p>
+
+<p>Supports shizuku as an installation method</p>
