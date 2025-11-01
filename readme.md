@@ -9,8 +9,9 @@
        style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
   <p>
 <p align="center">
+    <a href="https://apt.izzysoft.de/packages/com.je.fontsmanager.samsung"><img src="fastlane/githubassets/IzzyOnDroid.png" width="220" alt="IzzyOnDroid"></a>
   <a href="http://apps.obtainium.imranr.dev/redirect.html?r=obtainium://add/https://github.com/jeeneo/fonts"><img src="fastlane/githubassets/obtanium.png" width="220" alt="Obtanium"></a>
-  <a href="https://github.com/jeeneo/fonts/releases/latest"><img src="fastlane/githubassets/badge_github.png" width="220" alt="Get it on GitHub"></a>
+  <a href="https://github.com/jeeneo/fonts/releases/latest/download/fontsmanager.apk"><img src="fastlane/githubassets/badge_github.png" width="220" alt="Get it on GitHub"></a>
 </p>
   </p>
 </div>
