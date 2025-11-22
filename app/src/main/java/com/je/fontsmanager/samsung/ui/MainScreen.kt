@@ -29,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.je.fontsmanager.samsung.builder.FontBuilder
 import com.je.fontsmanager.samsung.util.ShizukuAPI
+import com.je.fontsmanager.samsung.util.CacheCleanupUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -57,16 +58,19 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.graphics.createBitmap
+import com.je.fontsmanager.samsung.R
 
-sealed class Screen(val route: String, val title: String) {
-    object Home : Screen("home", "Home")
-    object Settings : Screen("settings", "Manage")
+sealed class Screen(val route: String, val titleRes: Int) {
+    object Home : Screen("home", R.string.nav_home)
+    object Settings : Screen("settings", R.string.title_manage)
 }
 
+@Composable
 private fun sampleText(includeNumbers: Boolean = false): String =
-    if (includeNumbers) "Cwm, fjord-bank glyphs vext quiz\n\n1234567890\n\n!@#$%^&*()_+~" else "The quick brown fox jumps over the lazy dog"
+    if (includeNumbers) androidx.compose.ui.res.stringResource(R.string.sample_text_complex) else androidx.compose.ui.res.stringResource(R.string.sample_text_simple)
 
-private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, initialText: String = sampleText(false)) =
+private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, initialText: String) =
     TextView(ctx).apply {
         text = initialText
         setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp)
@@ -87,9 +91,9 @@ fun MainScreen() {
                         launchSingleTop = true; restoreState = true
                     }
                 }
-                NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text(Screen.Home.title) },
+                NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Home.titleRes)) },
                     selected = currentRoute == Screen.Home.route, onClick = { navTo(Screen.Home) })
-                NavigationBarItem(icon = { Icon(Icons.Default.Settings, null) }, label = { Text(Screen.Settings.title) },
+                NavigationBarItem(icon = { Icon(Icons.Default.Settings, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Settings.titleRes)) },
                     selected = currentRoute == Screen.Settings.route, onClick = { navTo(Screen.Settings) })
             }
         }
@@ -108,6 +112,8 @@ fun HomeScreen() {
 
     var selectedFontFile by remember { mutableStateOf<File?>(null) }
     var selectedFontName by remember { mutableStateOf<String?>(null) }
+    var selectedBoldFontFile by remember { mutableStateOf<File?>(null) }
+    var selectedBoldFontName by remember { mutableStateOf<String?>(null) }
     var displayName by remember { mutableStateOf("") }
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
@@ -116,21 +122,27 @@ fun HomeScreen() {
     var showInstructionsDialog by remember { mutableStateOf(false) }
     var pendingInstallPackage by remember { mutableStateOf<String?>(null) }
     var awaitingInstallResult by remember { mutableStateOf(false) }
+    var showFontDropdown by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && awaitingInstallResult) {
-                val pkgName = pendingInstallPackage
-                if (pkgName != null) {
-                    scope.launch {
-                        delay(300)
-                        val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-                        if (installed) {
-                            isProcessing = false
-                            awaitingInstallResult = false
-                            Toast.makeText(context, "Install succeeded", Toast.LENGTH_SHORT).show()
-                            pendingInstallPackage = null
+            if (event == Lifecycle.Event.ON_RESUME) {
+                val excludeFiles = listOfNotNull(selectedFontFile, selectedBoldFontFile)
+                CacheCleanupUtils.cleanup(context.cacheDir, excludeFiles)
+                if (awaitingInstallResult) {
+                    val pkgName = pendingInstallPackage
+                    if (pkgName != null) {
+                        scope.launch {
+                            delay(300)
+                            val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
+                            if (installed) {
+                                isProcessing = false
+                                awaitingInstallResult = false
+                                Toast.makeText(context, context.getString(R.string.toast_install_succeeded), Toast.LENGTH_SHORT).show()
+                                pendingInstallPackage = null
+                                CacheCleanupUtils.cleanup(context.cacheDir)
+                            }
                         }
                     }
                 }
@@ -151,10 +163,10 @@ fun HomeScreen() {
                 isProcessing = false
                 awaitingInstallResult = false
                 if (installed) {
-                    Toast.makeText(context, "Install succeeded", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, context.getString(R.string.toast_install_succeeded), Toast.LENGTH_SHORT).show()
                 } else {
                     if (result.resultCode == Activity.RESULT_CANCELED) {
-                        Toast.makeText(context, "Install cancelled", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(R.string.toast_install_cancelled), Toast.LENGTH_SHORT).show()
                     }
                 }
                 pendingInstallPackage = null
@@ -167,11 +179,13 @@ fun HomeScreen() {
 
     val ttfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
-            selectedFontFile?.let { oldFile ->
-                try { oldFile.delete() } catch (_: Exception) {}
-            }
-            
             val fileName = FontInstallerUtils.getFileName(context, it)
+            if (!fileName.endsWith(".ttf", ignoreCase = true)) {
+                Toast.makeText(context, context.getString(R.string.toast_only_ttf_supported), Toast.LENGTH_SHORT).show()
+                return@let
+            }
+            try { selectedFontFile?.delete() } catch (_: Exception) {}
+            previewTypeface = null
             val cachedFile = File(context.cacheDir, "temp_${System.currentTimeMillis()}.ttf")
             val success = try {
                 context.contentResolver.openInputStream(it)?.use { input ->
@@ -184,8 +198,36 @@ fun HomeScreen() {
                 selectedFontFile = cachedFile
                 selectedFontName = fileName
                 displayName = fileName.removeSuffix(".ttf")
-                // Toast.makeText(context, "Font file selected", Toast.LENGTH_SHORT).show()
-            } else Toast.makeText(context, "Failed to save font file", Toast.LENGTH_SHORT).show()
+                try {
+                    previewTypeface = AndroidTypefaceLegacy.createFromFile(cachedFile)
+                } catch (e: Exception) {
+                    Log.e("FontInstaller", "Failed to load font preview", e)
+                    previewTypeface = null
+                }
+            } else Toast.makeText(context, context.getString(R.string.toast_failed_to_save), Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    val boldTtfPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let {
+            val fileName = FontInstallerUtils.getFileName(context, it)
+            if (!fileName.endsWith(".ttf", ignoreCase = true)) {
+                Toast.makeText(context, context.getString(R.string.toast_only_ttf_supported), Toast.LENGTH_SHORT).show()
+                return@let
+            }
+            try { selectedBoldFontFile?.delete() } catch (_: Exception) {}
+            val cachedFile = File(context.cacheDir, "temp_bold_${System.currentTimeMillis()}.ttf")
+            val success = try {
+                context.contentResolver.openInputStream(it)?.use { input ->
+                    FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
+                }; true
+            } catch (e: Exception) {
+                Log.e("FontInstaller", "Failed to cache bold font", e); false
+            }
+            if (success) {
+                selectedBoldFontFile = cachedFile
+                selectedBoldFontName = fileName
+            } else Toast.makeText(context, context.getString(R.string.toast_failed_to_save_bold), Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -204,17 +246,20 @@ fun HomeScreen() {
                     isProcessing = false
                     awaitingInstallResult = false
                     pendingInstallPackage = null
-                    Toast.makeText(context, "Font already installed. Uninstall it first.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, context.getString(R.string.toast_already_installed), Toast.LENGTH_LONG).show()
+                    CacheCleanupUtils.cleanup(context.cacheDir)
                 },
                 onComplete = { success ->
                     if (ShizukuAPI.isUsable()) {
                         isProcessing = false
                         awaitingInstallResult = false
                         val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-                        Toast.makeText(context, if (installed && success) "Install succeeded" else "Install failed", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, context.getString(if (installed && success) R.string.toast_install_succeeded else R.string.toast_install_failed), Toast.LENGTH_SHORT).show()
                         pendingInstallPackage = null
+                        CacheCleanupUtils.cleanup(context.cacheDir)
                     }
-                }
+                },
+                boldTtfFile = selectedBoldFontFile
             )
         }
     }
@@ -222,26 +267,26 @@ fun HomeScreen() {
     if (showNameDialog) {
         AlertDialog(
             onDismissRequest = { showNameDialog = false },
-            title = { Text("Customize font name") },
+            title = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_title)) },
             text = {
                 Column {
-                    Text("Enter display name for the font:")
+                    Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_message))
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = displayName,
                         onValueChange = {
                             if (it.length <= 50) displayName = it
                         },
-                        label = { Text("Display name") },
+                        label = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_hint)) },
                         singleLine = true,
                         isError = displayName.length > 50,
                         supportingText = {
-                            Text("${displayName.length}/50")
+                            Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_counter, displayName.length))
                         }
                     )
                     if (displayName.length > 50) {
                         Text(
-                            "Maximum 50 characters allowed",
+                            androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_error),
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -252,9 +297,9 @@ fun HomeScreen() {
                 TextButton(
                     onClick = { showNameDialog = false; performInstall() },
                     enabled = displayName.isNotBlank() && displayName.length <= 50
-                ) { Text("Install") }
+                ) { Text(androidx.compose.ui.res.stringResource(R.string.button_install)) }
             },
-            dismissButton = { TextButton(onClick = { showNameDialog = false }) { Text("Cancel") } }
+            dismissButton = { TextButton(onClick = { showNameDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_cancel)) } }
         )
     }
 
@@ -265,132 +310,196 @@ fun HomeScreen() {
             else -> {
                 val w = d.intrinsicWidth.takeIf { it > 0 } ?: 128
                 val h = d.intrinsicHeight.takeIf { it > 0 } ?: 128
-                Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also { bmp ->
+                createBitmap(w, h).also { bmp ->
                     android.graphics.Canvas(bmp).apply { d.setBounds(0, 0, w, h); d.draw(this) }
                 }
             }
         }
     }
 
-    LaunchedEffect(selectedFontFile) {
-        selectedFontFile?.let { file ->
-            try {
-                previewTypeface = AndroidTypefaceLegacy.createFromFile(file)
-            } catch (_: Exception) {
-                previewTypeface = null
-            }
-        } ?: run { previewTypeface = null }
-    }
-
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     Box(Modifier.fillMaxSize()) {
-        val configuration = LocalConfiguration.current
-        val screenHeightPx = configuration.screenHeightDp.dp
-        var contentHeightPx by remember { mutableStateOf(0.dp) }
-        val scrollState = rememberScrollState()
-        val density = LocalDensity.current
-
         Column(
-            Modifier.fillMaxSize().let {
-                if (contentHeightPx > screenHeightPx) it.verticalScroll(scrollState, true) else it
-            }.padding(24.dp).onGloballyPositioned {
-                contentHeightPx = with(density) { it.size.height.toDp() }
-            },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (appIconBitmap != null) Icon(painter = BitmapPainter(appIconBitmap.asImageBitmap()), contentDescription = null, modifier = Modifier.size(64.dp), tint = Color.Unspecified)
+            appIconBitmap?.let {
+                Icon(BitmapPainter(it.asImageBitmap()), null, Modifier.size(48.dp), tint = Color.Unspecified)
+            }
             Spacer(Modifier.height(16.dp))
-            Text("Font installer", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
+            Text(androidx.compose.ui.res.stringResource(R.string.title_font_installer), style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(32.dp))
 
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     if (selectedFontName != null) {
-                        Text("Selected font", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                        Text(androidx.compose.ui.res.stringResource(R.string.label_selected_font), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
                         Spacer(Modifier.height(4.dp))
-                        Column(Modifier.fillMaxWidth().clickable { showFontPreviewDialog = true }.padding(vertical = 8.dp)) {
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                showFontPreviewDialog = true
+                                Log.d("FontInstaller", "Font preview dialog clicked, typeface is ${if (previewTypeface != null) "loaded" else "null"}")
+                            }.padding(vertical = 8.dp)
+                        ) {
                             Text(selectedFontName!!, style = MaterialTheme.typography.bodyLarge)
                             Spacer(Modifier.height(8.dp))
-                            if (previewTypeface != null)
-                                AndroidView(factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor) },
-                                    update = { tv -> tv.typeface = previewTypeface; tv.text = sampleText(false); tv.setTextColor(onSurfaceColor) },
-                                    modifier = Modifier.fillMaxWidth())
-                            else Text(sampleText(false), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.padding(top = 8.dp))
+                            if (previewTypeface != null) {
+                                val previewText = sampleText(false)
+                                AndroidView(
+                                    factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor, previewText).also { Log.d("FontInstaller", "Creating preview TextView with typeface") } },
+                                    update = { tv -> tv.typeface = previewTypeface; tv.text = previewText; tv.setTextColor(onSurfaceColor) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            } else Text(sampleText(false), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                         }
                         Spacer(Modifier.height(8.dp))
-                        Text("Display name: $displayName", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    } else Text("No font file selected", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(androidx.compose.ui.res.stringResource(R.string.label_display_name, displayName), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (selectedBoldFontFile != null) {
+                            Spacer(Modifier.height(12.dp))
+                            Divider()
+                            Spacer(Modifier.height(12.dp))
+                            Text(androidx.compose.ui.res.stringResource(R.string.label_bold_variant), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.height(4.dp))
+                            Text(selectedBoldFontName!!, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    } else Text(androidx.compose.ui.res.stringResource(R.string.label_no_font_selected), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
-            if (showFontPreviewDialog && previewTypeface != null)
-                Dialog(onDismissRequest = { showFontPreviewDialog = false }) {
-                    Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
-                        Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Font Preview", style = MaterialTheme.typography.titleMedium)
-                            Spacer(Modifier.height(16.dp))
-                            AndroidView(factory = { ctx -> makeSampleTextView(ctx, 20f, onSurfaceColor, sampleText(true)) },
-                                update = { tv -> tv.typeface = previewTypeface; tv.text = sampleText(true); tv.setTextColor(onSurfaceColor) },
-                                modifier = Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(8.dp))
-                            Button(onClick = { showFontPreviewDialog = false }) { Text("Close") }
+            Spacer(Modifier.height(16.dp))
+
+            Box(Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    { showFontDropdown = true },
+                    Modifier.fillMaxWidth(),
+                    enabled = !isProcessing
+                ) {
+                    Icon(Icons.Default.Add, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.button_select_font))
+                    Spacer(Modifier.weight(1f))
+                    Icon(Icons.Default.ArrowDropDown, null)
+                }
+
+                DropdownMenu(showFontDropdown, { showFontDropdown = false }) {
+                    DropdownMenuItem(
+                        { Text(androidx.compose.ui.res.stringResource(R.string.menu_regular_font)) },
+                        {
+                            showFontDropdown = false
+                            ttfPicker.launch(arrayOf("font/ttf", "font/*", "application/octet-stream"))
+                        },
+                        leadingIcon = { Icon(Icons.Default.Add, null) }
+                    )
+                    DropdownMenuItem(
+                        { Text(androidx.compose.ui.res.stringResource(R.string.menu_bold_variant)) },
+                        {
+                            showFontDropdown = false
+                            boldTtfPicker.launch(arrayOf("font/ttf", "font/*", "application/octet-stream"))
+                        },
+                        leadingIcon = { Icon(Icons.Default.Add, null) },
+                        enabled = selectedFontFile != null
+                    )
+                    if (selectedBoldFontFile != null) {
+                        DropdownMenuItem(
+                            { Text(androidx.compose.ui.res.stringResource(R.string.menu_remove_bold)) },
+                            {
+                                showFontDropdown = false
+                                try { selectedBoldFontFile?.delete() } catch (_: Exception) {}
+                                selectedBoldFontFile = null
+                                selectedBoldFontName = null
+                            },
+                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (selectedFontFile != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton({ showNameDialog = true }, Modifier.weight(1f), enabled = !isProcessing) {
+                        Icon(Icons.Default.Edit, null, Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(androidx.compose.ui.res.stringResource(R.string.button_display_name))
+                    }
+                    FilledTonalButton(
+                        { if (displayName.isBlank()) showNameDialog = true else performInstall() },
+                        Modifier.weight(1f),
+                        enabled = !isProcessing
+                    ) {
+                        if (isProcessing) {
+                            CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(androidx.compose.ui.res.stringResource(R.string.button_building))
+                        } else {
+                            Icon(Icons.Default.Build, null, Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(androidx.compose.ui.res.stringResource(R.string.button_build))
                         }
                     }
                 }
-
-            Spacer(Modifier.height(16.dp))
-            Button(onClick = { ttfPicker.launch(arrayOf("font/ttf", "font/*", "application/octet-stream")) }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
-                Icon(Icons.Default.Add, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Select font (.ttf)")
             }
 
             Spacer(Modifier.height(12.dp))
-            if (selectedFontFile != null) {
-                OutlinedButton(onClick = { showNameDialog = true }, modifier = Modifier.fillMaxWidth(), enabled = !isProcessing) {
-                    Icon(Icons.Default.Edit, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Display name")
-                }
-                Spacer(Modifier.height(12.dp))
-            }
-
-            FilledTonalButton(onClick = { if (displayName.isBlank()) showNameDialog = true else performInstall() },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !isProcessing && selectedFontFile != null
-            ) {
-                if (isProcessing) {
-                    CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.width(8.dp)); Text("Building")
-                } else {
-                    Icon(Icons.Default.Build, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Build and install")
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = {
-                val intent = Intent("com.samsung.settings.FontStyleActivity")
-                try { context.startActivity(intent) } catch (e: Exception) { Toast.makeText(context, "Cannot open font settings", Toast.LENGTH_SHORT).show() }
-            }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Settings, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Open font settings")
-            }
-
-            Spacer(Modifier.height(32.dp))
-            OutlinedButton(onClick = { showInstructionsDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Info, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Instructions")
+            OutlinedButton({
+                try { context.startActivity(Intent("com.samsung.settings.FontStyleActivity")) }
+                catch (e: Exception) { Toast.makeText(context, context.getString(R.string.toast_cannot_open_settings), Toast.LENGTH_SHORT).show() }
+            }, Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Settings, null, Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(androidx.compose.ui.res.stringResource(R.string.button_open_font_settings))
             }
         }
+
+        if (showFontPreviewDialog)
+            Dialog({ showFontPreviewDialog = false }) {
+                Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
+                    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_font_preview_title), style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.height(16.dp))
+                        if (previewTypeface != null) {
+                            val previewText = sampleText(true)
+                            AndroidView(
+                                factory = { ctx -> makeSampleTextView(ctx, 20f, onSurfaceColor, previewText) },
+                                update = { tv -> tv.typeface = previewTypeface; tv.text = previewText; tv.setTextColor(onSurfaceColor) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            Text(sampleText(true), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth())
+                            Spacer(Modifier.height(8.dp))
+                            Text(androidx.compose.ui.res.stringResource(R.string.error_font_preview), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Button({ showFontPreviewDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_close)) }
+                    }
+                }
+            }
 
         if (showInstructionsDialog)
-            Dialog(onDismissRequest = { showInstructionsDialog = false }) {
+            Dialog({ showInstructionsDialog = false }) {
                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
                     Column(Modifier.padding(24.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Instructions", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(Modifier.height(8.dp))
-                    Text("1. Select a font\n2. Customize display name (optional)\n3. Build & install\n4. Apply in Samsung settings\n\nNote: if certain fonts don't apply, uninstall, restart your device then retry", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    Spacer(Modifier.height(16.dp))
-                    Button(onClick = { showInstructionsDialog = false }) { Text("Close") }
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_instructions_title), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(Modifier.height(8.dp))
+                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_instructions_content), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                        Spacer(Modifier.height(16.dp))
+                        Button({ showInstructionsDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_close)) }
+                    }
                 }
             }
+
+        IconButton(
+            onClick = { showInstructionsDialog = true },
+            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp)
+        ) {
+            Icon(
+                Icons.Default.Info,
+                contentDescription = androidx.compose.ui.res.stringResource(R.string.content_description_instructions),
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
-
 }
 
 @Composable
@@ -399,14 +508,13 @@ fun SettingsScreen() {
     val scope = rememberCoroutineScope()
     var installedFonts by remember { mutableStateOf<List<String>>(emptyList()) }
     var isRefreshing by remember { mutableStateOf(false) }
-    var shizukuAvailable by remember { mutableStateOf(ShizukuAPI.isUsable()) }
     var shizukuAuthorized by remember { mutableStateOf(false) }
     var shizukuRunning by remember { mutableStateOf(false) }
 
     val filteredFonts = installedFonts.filterNot {
         it.endsWith(".foundation") || it.endsWith(".samsungone") || it.endsWith(".roboto")
     }
-    
+
     fun refreshFonts() {
         scope.launch {
             isRefreshing = true
@@ -433,12 +541,16 @@ fun SettingsScreen() {
             lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
-    
-    val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { refreshFonts() }
+    val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { 
+        scope.launch {
+            delay(500)
+            CacheCleanupUtils.cleanup(context.cacheDir)
+            refreshFonts()
+        }
+    }
     LaunchedEffect(Unit) { refreshFonts() }
     val fontTypefaces = remember { mutableStateMapOf<String, AndroidTypefaceLegacy?>() }
     val extractedPreviewFiles = remember { mutableStateMapOf<String, File>() }
-    
     LaunchedEffect(installedFonts) {
         val uninstalledPackages = extractedPreviewFiles.keys - installedFonts.toSet()
         uninstalledPackages.forEach { pkg ->
@@ -448,8 +560,6 @@ fun SettingsScreen() {
             extractedPreviewFiles.remove(pkg)
             fontTypefaces.remove(pkg)
         }
-        
-        // Extract previews for new fonts
         installedFonts.forEach { pkg ->
             if (!fontTypefaces.containsKey(pkg)) {
                 try {
@@ -472,69 +582,77 @@ fun SettingsScreen() {
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
-            Text("Manage", style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            Text(androidx.compose.ui.res.stringResource(R.string.title_manage), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
+            ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text("About", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                    Text("Font installer v1.2", style = MaterialTheme.typography.bodyMedium)
+                    Text(androidx.compose.ui.res.stringResource(R.string.section_about), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.about_version), style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text("Installed fonts", style = MaterialTheme.typography.titleMedium)
-                        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                        Text(androidx.compose.ui.res.stringResource(R.string.section_installed_fonts), style = MaterialTheme.typography.titleMedium)
+                        Box(Modifier.size(48.dp), Alignment.Center) {
                             if (isRefreshing) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-                            else IconButton(onClick = { refreshFonts() }) { Icon(Icons.Default.Refresh, "Refresh") }
+                            else IconButton(onClick = { refreshFonts() }) { Icon(Icons.Default.Refresh, null) }
                         }
                     }
                     Spacer(Modifier.height(16.dp))
                     if (filteredFonts.isNotEmpty()) {
                         filteredFonts.forEach { pkg ->
-                            ElevatedCard(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                                Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            ElevatedCard(Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(16.dp), Arrangement.SpaceBetween, Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(pkg.substringAfterLast(".").replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }, style = MaterialTheme.typography.bodyLarge)
                                         Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         fontTypefaces[pkg]?.let { tf ->
                                             Spacer(Modifier.height(4.dp))
-                                            AndroidView(factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor) },
-                                                update = { tv -> tv.typeface = tf; tv.text = sampleText(false); tv.setTextColor(onSurfaceColor) },
+                                            val previewText = sampleText(false)
+                                            AndroidView(
+                                                factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor, previewText) },
+                                                update = { tv -> tv.typeface = tf; tv.text = previewText; tv.setTextColor(onSurfaceColor) },
                                                 modifier = Modifier.fillMaxWidth())
                                         }
                                     }
-                                    IconButton(onClick = {
+                                    IconButton({
                                         scope.launch {
-                                            val success = if (ShizukuAPI.shouldUseShizuku(context)) ShizukuAPI.uninstall(pkg)
-                                            else { uninstallLauncher.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") }); null }
-                                            success?.let { Toast.makeText(context, if (it) "Uninstalled" else "Uninstall failed", Toast.LENGTH_SHORT).show(); if (it) refreshFonts() }
+                                            if (ShizukuAPI.shouldUseShizuku(context)) {
+                                                val success = ShizukuAPI.uninstall(pkg)
+                                                Toast.makeText(context, context.getString(if (success) R.string.toast_uninstalled else R.string.toast_uninstall_failed), Toast.LENGTH_SHORT).show()
+                                                if (success) { CacheCleanupUtils.cleanup(context.cacheDir); delay(500); refreshFonts() }
+                                            } else {
+                                                uninstallLauncher.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") })
+                                            }
                                         }
-                                    }) { Icon(Icons.Default.Delete, contentDescription = "Uninstall", tint = MaterialTheme.colorScheme.error) }
+                                    }) { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                                 }
                             }
                         }
-                    } else Text("No custom fonts installed", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else Text(androidx.compose.ui.res.stringResource(R.string.no_custom_fonts), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             Spacer(Modifier.height(16.dp))
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+            ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Shizuku", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.section_shizuku), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
                     val shizukuInstalled = remember { ShizukuAPI.isInstalled() }
                     LaunchedEffect(shizukuInstalled) { checkShizukuStatus() }
                     val shizukuStatus = when {
-                        !shizukuInstalled -> "Shizuku is not installed"
-                        shizukuRunning && shizukuAuthorized -> "Running (authorized)"
-                        shizukuRunning -> "Running (unauthorized)"
-                        else -> "Not running"
+                        !shizukuInstalled -> context.getString(R.string.shizuku_not_installed)
+                        shizukuRunning && shizukuAuthorized -> context.getString(R.string.shizuku_running_authorized)
+                        shizukuRunning -> context.getString(R.string.shizuku_running_unauthorized)
+                        else -> context.getString(R.string.shizuku_not_running)
                     }
-                    Text("Status: $shizukuStatus", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
+                    Text(androidx.compose.ui.res.stringResource(R.string.shizuku_status, shizukuStatus), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 8.dp))
                     if (shizukuInstalled && shizukuRunning && !shizukuAuthorized) {
                         Button(onClick = {
-                            ShizukuAPI.requestPermission(onGranted = { shizukuAuthorized = true; Toast.makeText(context, "Permission granted", Toast.LENGTH_SHORT).show() },
-                                onDenied = { shizukuAuthorized = false; Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show() })
-                        }) { Text("Request permission") }
+                            ShizukuAPI.requestPermission(
+                                onGranted = { shizukuAuthorized = true; Toast.makeText(context, context.getString(R.string.toast_permission_granted), Toast.LENGTH_SHORT).show() },
+                                onDenied = { shizukuAuthorized = false; Toast.makeText(context, context.getString(R.string.toast_permission_denied), Toast.LENGTH_SHORT).show() }
+                            )
+                        }) { Text(androidx.compose.ui.res.stringResource(R.string.button_request_permission)) }
                     }
                 }
             }
@@ -566,12 +684,13 @@ object FontInstallerUtils {
         displayName: String,
         installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
         onAlreadyInstalled: () -> Unit,
-        onComplete: (Boolean) -> Unit = {}
+        onComplete: (Boolean) -> Unit = {},
+        boldTtfFile: File? = null
     ) = withContext(Dispatchers.IO) {
         val outputApk = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
         try {
             val fontName = displayName.replace(Regex("[^a-zA-Z0-9]"), "")
-            val config = FontBuilder.FontConfig(displayName = displayName, fontName = fontName, ttfFile = ttfFile)
+            val config = FontBuilder.FontConfig(displayName = displayName, fontName = fontName, ttfFile = ttfFile, boldTtfFile = boldTtfFile)
             if (isAppInstalled(context, config.packageName)) {
                 withContext(Dispatchers.Main) { onAlreadyInstalled() }
                 return@withContext

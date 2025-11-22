@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.activity.compose.setContent
 import com.je.fontsmanager.samsung.ui.MainScreen
 import com.je.fontsmanager.samsung.util.ShizukuAPI
+import com.je.fontsmanager.samsung.util.CacheCleanupUtils
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -59,19 +60,13 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    override fun onDestroy() {
+        super.onDestroy()
+        cleanupCache()
+    }
+    
     private fun cleanupCache() {
-        try {
-            cacheDir.listFiles()?.forEach { file ->
-                when {
-                    file.name.startsWith("temp_") && file.name.endsWith(".ttf") -> file.delete()
-                    file.name.startsWith("signed_") && file.name.endsWith(".apk") -> file.delete()
-                    file.name.startsWith("apk_build_") && file.isDirectory -> file.deleteRecursively()
-                    file.name.startsWith("font_preview_") && file.name.endsWith(".ttf") -> file.delete()
-                }
-            }
-        } catch (e: Exception) {
-            // ignore
-        }
+        CacheCleanupUtils.cleanup(cacheDir)
     }
 }
 

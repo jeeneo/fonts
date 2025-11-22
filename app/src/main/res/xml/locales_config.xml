@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Default language (English) -->
+    <locale android:name="en"/>
+    
+    <!-- Simplified Chinese -->
+    <locale android:name="zh"/>
+    
+    <!-- Traditional Chinese (Hong Kong) -->
+    <locale android:name="zh-HK"/>
+    
+    <!-- Traditional Chinese (Taiwan) -->
+    <locale android:name="zh-TW"/>
+</locale-config>

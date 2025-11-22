@@ -26,12 +26,15 @@ object FontBuilder {
     data class FontConfig(
         val displayName: String,
         val fontName: String,
-        val ttfFile: File
+        val ttfFile: File,
+        val boldTtfFile: File? = null
     ) {
         val packageName: String
             get() = "com.monotype.android.font.$fontName"
         val ttfFileName: String
             get() = "$fontName.ttf"
+        val ttfBoldFileName: String
+            get() = "${fontName}_bold.ttf"
         val xmlFileName: String
             get() = "$fontName.xml"
     }
@@ -93,6 +96,10 @@ object FontBuilder {
             fontsDir.mkdirs()
             val destTtf = File(fontsDir, config.ttfFileName)
             config.ttfFile.copyTo(destTtf, overwrite = true)
+            if (config.boldTtfFile != null) {
+                val destBoldTtf = File(fontsDir, config.ttfBoldFileName)
+                config.boldTtfFile.copyTo(destBoldTtf, overwrite = true)
+            }
             zipDirectory(extractDir, outputApk)
             true
         } catch (e: Exception) {
@@ -295,7 +302,22 @@ object FontBuilder {
     }
 
     private fun createFontXml(file: File, config: FontConfig) { 
-        val fontXml = """<?xml version="1.0" encoding="utf-8"?>
+        val fontXml = if (config.boldTtfFile != null) {
+            """<?xml version="1.0" encoding="utf-8"?>
+<font displayname="${config.displayName}">
+    <sans>
+        <file>
+            <filename>${config.ttfFileName}</filename>
+            <droidname>DroidSans.ttf</droidname>
+        </file>
+        <file>
+            <filename>${config.ttfBoldFileName}</filename>
+            <droidname>DroidSans-Bold.ttf</droidname>
+        </file>
+    </sans>
+</font>"""
+        } else {
+            """<?xml version="1.0" encoding="utf-8"?>
 <font displayname="${config.displayName}">
     <sans>
         <file>
@@ -308,6 +330,7 @@ object FontBuilder {
         </file>
     </sans>
 </font>"""
+        }
         file.writeText(fontXml)
     }
 

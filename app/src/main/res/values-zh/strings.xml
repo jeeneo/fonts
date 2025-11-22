@@ -1,0 +1,67 @@
+<!-- machine translated -->
+
+<resources>
+    <string name="app_name">字体</string>
+    
+    <string name="nav_home">首页</string>
+    <string name="title_font_installer">字体安装器</string>
+    <string name="label_selected_font">已选字体</string>
+    <string name="label_display_name">显示名称:%s</string>
+    <string name="label_bold_variant">粗体变体</string>
+    <string name="label_no_font_selected">未选择字体文件</string>
+    <string name="button_select_font">选择字体</string>
+    <string name="button_display_name">显示名称</string>
+    <string name="button_build">构建</string>
+    <string name="button_building">构建中</string>
+    <string name="button_open_font_settings">打开字体设置</string>
+    <string name="menu_regular_font">常规字体 (.ttf)</string>
+    <string name="menu_bold_variant">粗体变体 (.ttf)</string>
+    <string name="menu_remove_bold">移除粗体变体</string>
+    
+    <string name="dialog_customize_name_title">自定义字体名称</string>
+    <string name="dialog_customize_name_message">输入字体的显示名称:</string>
+    <string name="dialog_customize_name_hint">显示名称</string>
+    <string name="dialog_customize_name_counter">%d/50</string>
+    <string name="dialog_customize_name_error">最多允许50个字符</string>
+    <string name="button_install">安装</string>
+    <string name="button_cancel">取消</string>
+    <string name="button_close">关闭</string>
+    
+    <string name="dialog_font_preview_title">字体预览</string>
+    
+    <string name="dialog_instructions_title">使用说明</string>
+    <string name="dialog_instructions_content">1. 选择字体\n2. 自定义显示名称(可选)\n3. 构建并安装\n4. 在三星设置中应用\n\n注意:如果某些字体无法应用,请卸载后重启设备再重试</string>
+    <string name="content_description_instructions">使用说明</string>
+    
+    <string name="title_manage">管理</string>
+    <string name="section_about">关于</string>
+    <string name="about_version">字体安装器 v1.3</string>
+    <string name="section_installed_fonts">已安装字体</string>
+    <string name="no_custom_fonts">未安装自定义字体</string>
+    <string name="section_shizuku">Shizuku</string>
+    <string name="shizuku_status">状态:%s</string>
+    <string name="shizuku_not_installed">未安装 Shizuku</string>
+    <string name="shizuku_running_authorized">运行中(已授权)</string>
+    <string name="shizuku_running_unauthorized">运行中(未授权)</string>
+    <string name="shizuku_not_running">未运行</string>
+    <string name="button_request_permission">请求权限</string>
+    
+    <string name="toast_only_ttf_supported">仅支持 .ttf 文件</string>
+    <string name="toast_failed_to_save">保存字体文件失败</string>
+    <string name="toast_failed_to_save_bold">保存粗体字体文件失败</string>
+    <string name="toast_already_installed">字体已安装,请先卸载</string>
+    <string name="toast_install_succeeded">安装成功</string>
+    <string name="toast_install_failed">安装失败</string>
+    <string name="toast_install_cancelled">安装已取消</string>
+    <string name="toast_cannot_open_settings">无法打开字体设置</string>
+        
+    <string name="sample_text_simple">春眠不觉晓,处处闻啼鸟</string>
+    <string name="sample_text_complex">天地玄黄宇宙洪荒日月盈昃辰宿列张\n\n1234567890\n\n!@#¥%……&amp;*()_+~</string>
+    
+    <string name="error_font_preview">无法加载字体预览</string>
+
+    <string name="toast_uninstalled">已卸载</string>
+    <string name="toast_uninstall_failed">卸载失败</string>
+    <string name="toast_permission_granted">权限已授予</string>
+    <string name="toast_permission_denied">权限被拒绝</string>
+</resources>
