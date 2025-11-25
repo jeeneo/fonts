@@ -64,11 +64,42 @@ import com.je.fontsmanager.samsung.R
 sealed class Screen(val route: String, val titleRes: Int) {
     object Home : Screen("home", R.string.nav_home)
     object Settings : Screen("settings", R.string.title_manage)
+    object FontPreview : Screen("font_preview", R.string.dialog_font_preview_title)
+}
+
+private fun getRandomSimpleText(context: Context): String {
+    val simpleTexts = mutableListOf<String>()
+    val locale = context.resources.configuration.locales[0]
+    val isEnglish = locale.language == "en"
+    
+    listOf(
+        R.string.sample_text_simple_1,
+        R.string.sample_text_simple_2,
+        R.string.sample_text_simple_3
+    ).forEachIndexed { index, resId ->
+        try {
+            val text = context.getString(resId)
+            if (text.isNotEmpty()) {
+                if (index == 2 && !isEnglish) {
+                    if (Math.random() < 0.35) simpleTexts.add(text)
+                } else {
+                    simpleTexts.add(text)
+                }
+            }
+        } catch (_: Exception) {}
+    }
+    return simpleTexts.randomOrNull() ?: "sample text"
 }
 
 @Composable
-private fun sampleText(includeNumbers: Boolean = false): String =
-    if (includeNumbers) androidx.compose.ui.res.stringResource(R.string.sample_text_complex) else androidx.compose.ui.res.stringResource(R.string.sample_text_simple)
+private fun sampleText(includeNumbers: Boolean = false): String {
+    val context = LocalContext.current
+    return if (includeNumbers) {
+        androidx.compose.ui.res.stringResource(R.string.sample_text_complex)
+    } else {
+        remember { getRandomSimpleText(context) }
+    }
+}
 
 private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, initialText: String) =
     TextView(ctx).apply {
@@ -77,48 +108,68 @@ private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, 
         setTextColor(textColor)
     }
 
+class HomeScreenState {
+    var selectedFontFile by mutableStateOf<File?>(null)
+    var selectedFontName by mutableStateOf<String?>(null)
+    var selectedBoldFontFile by mutableStateOf<File?>(null)
+    var selectedBoldFontName by mutableStateOf<String?>(null)
+    var displayName by mutableStateOf("")
+    var previewTypeface by mutableStateOf<AndroidTypefaceLegacy?>(null)
+    var boldPreviewTypeface by mutableStateOf<AndroidTypefaceLegacy?>(null)
+}
+
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    val homeScreenState = remember { HomeScreenState() }
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                val navBackStackEntry by navController.currentBackStackEntryAsState()
-                val currentRoute = navBackStackEntry?.destination?.route
-                fun navTo(screen: Screen) {
-                    navController.navigate(screen.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true; restoreState = true
+            if (currentRoute != Screen.FontPreview.route) {
+                NavigationBar {
+                    fun navTo(screen: Screen) {
+                        navController.navigate(screen.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true; restoreState = true
+                        }
                     }
+                    NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Home.titleRes)) },
+                        selected = currentRoute == Screen.Home.route, onClick = { navTo(Screen.Home) })
+                    NavigationBarItem(icon = { Icon(Icons.Default.Settings, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Settings.titleRes)) },
+                        selected = currentRoute == Screen.Settings.route, onClick = { navTo(Screen.Settings) })
                 }
-                NavigationBarItem(icon = { Icon(Icons.Default.Home, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Home.titleRes)) },
-                    selected = currentRoute == Screen.Home.route, onClick = { navTo(Screen.Home) })
-                NavigationBarItem(icon = { Icon(Icons.Default.Settings, null) }, label = { Text(androidx.compose.ui.res.stringResource(Screen.Settings.titleRes)) },
-                    selected = currentRoute == Screen.Settings.route, onClick = { navTo(Screen.Settings) })
             }
         }
     ) { innerPadding ->
-        NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
-            composable(Screen.Home.route) { HomeScreen() }
+        val navHostPadding = if (currentRoute == Screen.FontPreview.route) {
+            PaddingValues(0.dp)
+        } else {
+            innerPadding
+        }
+        NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(navHostPadding)) {
+            composable(Screen.Home.route) { HomeScreen(navController, homeScreenState) }
             composable(Screen.Settings.route) { SettingsScreen() }
+            composable(Screen.FontPreview.route) { FontPreviewScreen(navController, homeScreenState) }
         }
     }
 }
 
 @Composable
-fun HomeScreen() {
+fun HomeScreen(navController: androidx.navigation.NavController, sharedState: HomeScreenState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var selectedFontFile by remember { mutableStateOf<File?>(null) }
-    var selectedFontName by remember { mutableStateOf<String?>(null) }
-    var selectedBoldFontFile by remember { mutableStateOf<File?>(null) }
-    var selectedBoldFontName by remember { mutableStateOf<String?>(null) }
-    var displayName by remember { mutableStateOf("") }
+    var selectedFontFile by sharedState::selectedFontFile
+    var selectedFontName by sharedState::selectedFontName
+    var selectedBoldFontFile by sharedState::selectedBoldFontFile
+    var selectedBoldFontName by sharedState::selectedBoldFontName
+    var displayName by sharedState::displayName
+    var previewTypeface by sharedState::previewTypeface
+    var boldPreviewTypeface by sharedState::boldPreviewTypeface
+    
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
-    var showFontPreviewDialog by remember { mutableStateOf(false) }
-    var previewTypeface by remember { mutableStateOf<AndroidTypefaceLegacy?>(null) }
     var showInstructionsDialog by remember { mutableStateOf(false) }
     var pendingInstallPackage by remember { mutableStateOf<String?>(null) }
     var awaitingInstallResult by remember { mutableStateOf(false) }
@@ -227,36 +278,32 @@ fun HomeScreen() {
             if (success) {
                 selectedBoldFontFile = cachedFile
                 selectedBoldFontName = fileName
+                try {
+                    boldPreviewTypeface = AndroidTypefaceLegacy.createFromFile(cachedFile)
+                } catch (e: Exception) {
+                    Log.e("FontInstaller", "Failed to load bold font preview", e)
+                    boldPreviewTypeface = null
+                }
             } else Toast.makeText(context, context.getString(R.string.toast_failed_to_save_bold), Toast.LENGTH_SHORT).show()
         }
     }
 
     fun performInstall() {
         val pkgName = "com.monotype.android.font.${displayName.replace(Regex("[^a-zA-Z0-9]"), "")}"
-        pendingInstallPackage = pkgName
-        awaitingInstallResult = true
+        pendingInstallPackage = pkgName; awaitingInstallResult = true
         scope.launch {
             isProcessing = true
-            FontInstallerUtils.buildAndInstallFont(
-                context,
-                selectedFontFile!!,
-                displayName,
-                installLauncher,
+            FontInstallerUtils.buildAndInstallFont(context, selectedFontFile!!, displayName, installLauncher,
                 onAlreadyInstalled = {
-                    isProcessing = false
-                    awaitingInstallResult = false
-                    pendingInstallPackage = null
+                    isProcessing = false; awaitingInstallResult = false; pendingInstallPackage = null
                     Toast.makeText(context, context.getString(R.string.toast_already_installed), Toast.LENGTH_LONG).show()
                     CacheCleanupUtils.cleanup(context.cacheDir)
                 },
                 onComplete = { success ->
                     if (ShizukuAPI.isUsable()) {
-                        isProcessing = false
-                        awaitingInstallResult = false
-                        val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-                        Toast.makeText(context, context.getString(if (installed && success) R.string.toast_install_succeeded else R.string.toast_install_failed), Toast.LENGTH_SHORT).show()
-                        pendingInstallPackage = null
-                        CacheCleanupUtils.cleanup(context.cacheDir)
+                        isProcessing = false; awaitingInstallResult = false
+                        Toast.makeText(context, context.getString(if (FontInstallerUtils.isAppInstalled(context, pkgName) && success) R.string.toast_install_succeeded else R.string.toast_install_failed), Toast.LENGTH_SHORT).show()
+                        pendingInstallPackage = null; CacheCleanupUtils.cleanup(context.cacheDir)
                     }
                 },
                 boldTtfFile = selectedBoldFontFile
@@ -272,34 +319,15 @@ fun HomeScreen() {
                 Column {
                     Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_message))
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = {
-                            if (it.length <= 50) displayName = it
-                        },
+                    OutlinedTextField(displayName, { if (it.length <= 50) displayName = it },
                         label = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_hint)) },
-                        singleLine = true,
-                        isError = displayName.length > 50,
-                        supportingText = {
-                            Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_counter, displayName.length))
-                        }
-                    )
-                    if (displayName.length > 50) {
-                        Text(
-                            androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_error),
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
+                        singleLine = true, isError = displayName.length > 50,
+                        supportingText = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_counter, displayName.length)) })
+                    if (displayName.length > 50) Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_error), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                 }
             },
-            confirmButton = {
-                TextButton(
-                    onClick = { showNameDialog = false; performInstall() },
-                    enabled = displayName.isNotBlank() && displayName.length <= 50
-                ) { Text(androidx.compose.ui.res.stringResource(R.string.button_install)) }
-            },
-            dismissButton = { TextButton(onClick = { showNameDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_cancel)) } }
+            confirmButton = { TextButton({ showNameDialog = false; performInstall() }, enabled = displayName.isNotBlank() && displayName.length <= 50) { Text(androidx.compose.ui.res.stringResource(R.string.button_install)) } },
+            dismissButton = { TextButton({ showNameDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_cancel)) } }
         )
     }
 
@@ -337,8 +365,8 @@ fun HomeScreen() {
                         Spacer(Modifier.height(4.dp))
                         Column(
                             Modifier.fillMaxWidth().clickable {
-                                showFontPreviewDialog = true
-                                Log.d("FontInstaller", "Font preview dialog clicked, typeface is ${if (previewTypeface != null) "loaded" else "null"}")
+                                navController.navigate(Screen.FontPreview.route)
+                                Log.d("FontInstaller", "Navigating to font preview, typeface is ${if (previewTypeface != null) "loaded" else "null"}")
                             }.padding(vertical = 8.dp)
                         ) {
                             Text(selectedFontName!!, style = MaterialTheme.typography.bodyLarge)
@@ -407,6 +435,7 @@ fun HomeScreen() {
                                 try { selectedBoldFontFile?.delete() } catch (_: Exception) {}
                                 selectedBoldFontFile = null
                                 selectedBoldFontName = null
+                                boldPreviewTypeface = null
                             },
                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         )
@@ -452,30 +481,6 @@ fun HomeScreen() {
             }
         }
 
-        if (showFontPreviewDialog)
-            Dialog({ showFontPreviewDialog = false }) {
-                Surface(shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
-                    Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(androidx.compose.ui.res.stringResource(R.string.dialog_font_preview_title), style = MaterialTheme.typography.titleMedium)
-                        Spacer(Modifier.height(16.dp))
-                        if (previewTypeface != null) {
-                            val previewText = sampleText(true)
-                            AndroidView(
-                                factory = { ctx -> makeSampleTextView(ctx, 20f, onSurfaceColor, previewText) },
-                                update = { tv -> tv.typeface = previewTypeface; tv.text = previewText; tv.setTextColor(onSurfaceColor) },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        } else {
-                            Text(sampleText(true), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.fillMaxWidth())
-                            Spacer(Modifier.height(8.dp))
-                            Text(androidx.compose.ui.res.stringResource(R.string.error_font_preview), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
-                        }
-                        Spacer(Modifier.height(16.dp))
-                        Button({ showFontPreviewDialog = false }) { Text(androidx.compose.ui.res.stringResource(R.string.button_close)) }
-                    }
-                }
-            }
-
         if (showInstructionsDialog)
             Dialog({ showInstructionsDialog = false }) {
                 Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.medium, tonalElevation = 8.dp) {
@@ -498,6 +503,210 @@ fun HomeScreen() {
                 contentDescription = androidx.compose.ui.res.stringResource(R.string.content_description_instructions),
                 tint = MaterialTheme.colorScheme.primary
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedState: HomeScreenState) {
+    val previewTypeface = sharedState.previewTypeface
+    val fontName = sharedState.selectedFontName
+    val boldTypeface = sharedState.boldPreviewTypeface
+    val boldFontName = sharedState.selectedBoldFontName
+    
+    var customText by remember { mutableStateOf("") }
+    var textSize by remember { mutableStateOf(24f) }
+    var showBoldPreview by remember { mutableStateOf(false) }
+    
+    val context = LocalContext.current
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
+    val defaultSampleText = remember { getRandomSimpleText(context) }
+    val simpleSampleText = remember { getRandomSimpleText(context) }
+    
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(fontName ?: androidx.compose.ui.res.stringResource(R.string.dialog_font_preview_title)) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = androidx.compose.ui.res.stringResource(R.string.button_back))
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
+        ) {
+            if (previewTypeface == null) {
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.error_font_preview),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            } else {
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.preview_text_size, textSize.toInt()),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Slider(
+                            value = textSize,
+                            onValueChange = { textSize = it },
+                            valueRange = 12f..72f,
+                            steps = 11
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = customText,
+                    onValueChange = { customText = it },
+                    label = { Text(androidx.compose.ui.res.stringResource(R.string.preview_custom_text_hint)) },
+                    placeholder = { Text(simpleSampleText) },
+                    modifier = Modifier.fillMaxWidth(),
+                    maxLines = 3
+                )
+                Spacer(Modifier.height(16.dp))
+                if (boldTypeface != null) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.preview_show_bold),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Switch(
+                            checked = showBoldPreview,
+                            onCheckedChange = { showBoldPreview = it }
+                        )
+                    }
+                    if (showBoldPreview && boldFontName != null) {
+                        Text(
+                            boldFontName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(Modifier.height(16.dp))
+                }
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            if (showBoldPreview && boldTypeface != null) 
+                                androidx.compose.ui.res.stringResource(R.string.preview_bold_variant) 
+                            else 
+                                androidx.compose.ui.res.stringResource(R.string.preview_regular),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        val displayText = customText.ifBlank { defaultSampleText }
+                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
+                        AndroidView(
+                            factory = { ctx ->
+                                TextView(ctx).apply {
+                                    text = displayText
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize)
+                                    setTextColor(onSurfaceColor)
+                                    typeface = currentTypeface
+                                }
+                            },
+                            update = { tv ->
+                                tv.text = displayText
+                                tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSize)
+                                tv.setTextColor(onSurfaceColor)
+                                tv.typeface = currentTypeface
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.preview_alphabet),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        
+                        // val alphabetText = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz"
+                        val alphabetText = androidx.compose.ui.res.stringResource(R.string.sample_alphabet)
+                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
+                        
+                        AndroidView(
+                            factory = { ctx ->
+                                TextView(ctx).apply {
+                                    text = alphabetText
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                                    setTextColor(onSurfaceColor)
+                                    typeface = currentTypeface
+                                }
+                            },
+                            update = { tv ->
+                                tv.text = alphabetText
+                                tv.setTextColor(onSurfaceColor)
+                                tv.typeface = currentTypeface
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            androidx.compose.ui.res.stringResource(R.string.preview_numbers_symbols),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        
+                        val numbersText = "0123456789\n!@#\$%^&*()_+-=[]{}|;':\",./<>?"
+                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
+                        
+                        AndroidView(
+                            factory = { ctx ->
+                                TextView(ctx).apply {
+                                    text = numbersText
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                                    setTextColor(onSurfaceColor)
+                                    typeface = currentTypeface
+                                }
+                            },
+                            update = { tv ->
+                                tv.text = numbersText
+                                tv.setTextColor(onSurfaceColor)
+                                tv.typeface = currentTypeface
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -586,7 +795,14 @@ fun SettingsScreen() {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(androidx.compose.ui.res.stringResource(R.string.section_about), style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 8.dp))
-                    Text(androidx.compose.ui.res.stringResource(R.string.about_version), style = MaterialTheme.typography.bodyMedium)
+                    val versionName = remember {
+                        try {
+                            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                        } catch (_: Exception) {
+                            "Unknown"
+                        }
+                    }
+                    Text(androidx.compose.ui.res.stringResource(R.string.app_name) + " " + versionName, style = MaterialTheme.typography.bodyMedium)
                 }
             }
             Spacer(Modifier.height(16.dp))

@@ -11,7 +11,7 @@
     <string name="button_display_name">Display name</string>
     <string name="button_build">Build</string>
     <string name="button_building">Building</string>
-    <string name="button_open_font_settings">Open font settings</string>
+    <string name="button_open_font_settings">Open font style</string>
     <string name="menu_regular_font">Regular font (.ttf)</string>
     <string name="menu_bold_variant">Bold variant (.ttf)</string>
     <string name="menu_remove_bold">Remove bold variant</string>
@@ -24,16 +24,24 @@
     <string name="button_install">Install</string>
     <string name="button_cancel">Cancel</string>
     <string name="button_close">Close</string>
+    <string name="button_back">Back</string>
     
     <string name="dialog_font_preview_title">Font Preview</string>
+    <string name="preview_text_size">Text size: %d sp</string>
+    <string name="preview_custom_text_hint">Enter custom text to preview</string>
+    <string name="preview_show_bold">Show bold variant</string>
+    <string name="preview_bold_variant">Bold variant</string>
+    <string name="preview_regular">Custom</string>
+    <string name="preview_alphabet">Alphabet</string>
+    <string name="preview_numbers_symbols">Numbers and Symbols</string>
     
     <string name="dialog_instructions_title">Instructions</string>
-    <string name="dialog_instructions_content">1. Select a font\n2. Customize display name (optional)\n3. Build &amp; install\n4. Apply in Samsung settings\n\nNote: if certain fonts don\'t apply, uninstall, restart your device then retry</string>
+    <string name="dialog_instructions_content">1. Select a font\n2. Customize display name (optional)\n3. Build and install\n4. Apply in Font style\n\nNote: if certain fonts don\'t apply, uninstall, restart your device then retry</string>
     <string name="content_description_instructions">Instructions</string>
     
     <string name="title_manage">Manage</string>
     <string name="section_about">About</string>
-    <string name="about_version">Font installer v1.3</string>
+    <!-- <string name="app_name">Font installer</string> -->
     <string name="section_installed_fonts">Installed fonts</string>
     <string name="no_custom_fonts">No custom fonts installed</string>
     <string name="section_shizuku">Shizuku</string>
@@ -51,10 +59,13 @@
     <string name="toast_install_succeeded">Install succeeded</string>
     <string name="toast_install_failed">Install failed</string>
     <string name="toast_install_cancelled">Install cancelled</string>
-    <string name="toast_cannot_open_settings">Cannot open font settings</string>
+    <string name="toast_cannot_open_settings">Cannot open Font style</string>
     
-    <string name="sample_text_simple">The quick brown fox jumps over the lazy dog</string>
+    <string name="sample_text_simple_1">etaoin shrdlu</string>
+    <string name="sample_text_simple_2">The quick brown fox jumps over the lazy dog</string>
+    <string name="sample_text_simple_3">Sphinx of black quartz, judge my vow</string>
     <string name="sample_text_complex">Cwm, fjord-bank glyphs vext quiz\n\n1234567890\n\n!@#$%^&amp;*()_+~</string>
+    <string name="sample_alphabet">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</string>
     
     <string name="error_font_preview">Could not load font preview</string>
 

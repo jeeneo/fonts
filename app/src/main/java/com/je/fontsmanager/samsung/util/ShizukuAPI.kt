@@ -23,8 +23,13 @@ object ShizukuAPI {
 
     private fun context() = appContext ?: throw IllegalStateException("Call init() first")
 
-    fun shouldUseShizuku(context: Context): Boolean =
-        isUsable() && !isPermissionDenied()
+    fun shouldUseShizuku(context: Context): Boolean {
+        if (isUsable()) {
+            setPermissionDenied(false)
+            return true
+        }
+        return false
+    }
 
     private fun isPermissionDenied(): Boolean {
         val prefs = context().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
