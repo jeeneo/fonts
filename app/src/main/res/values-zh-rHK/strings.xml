@@ -65,7 +65,7 @@
     
     <string name="sample_text_simple_1">春眠不覺曉,處處聞啼鳥</string>
     <string name="sample_text_simple_2">我理解能力斷咗線，只好亂打啲古怪文字嚟裝到自己好似好有型咁。</string>
-    <string name="sample_text_simple_3">我絕對唔會好似對自己咁樣同朋友講嘢。</string>
+    <!-- <string name="sample_text_simple_3">我絕對唔會好似對自己咁樣同朋友講嘢。</string> -->
     <string name="sample_text_complex">天地玄黃宇宙洪荒日月盈昃辰宿列張\n\n1234567890\n\n!@#$%……&amp;*()_+~</string>
     
     <string name="error_font_preview">無法載入字型預覽</string>

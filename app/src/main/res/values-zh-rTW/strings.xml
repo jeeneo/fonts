@@ -64,7 +64,7 @@
 
     <string name="sample_text_simple_1">春眠不覺曉,處處聞啼鳥</string>
     <string name="sample_text_simple_2">我理解能力掉線，只能亂敲些詭異文字來假裝自己很有范兒。</string>
-    <string name="sample_text_simple_3">我絕對不會像對自己那樣和朋友說話。</string>
+    <!-- <string name="sample_text_simple_3">我絕對不會像對自己那樣和朋友說話。</string> -->
     <string name="sample_text_complex">天地玄黃宇宙洪荒日月盈昃辰宿列張\n\n1234567890\n\n!@#$%……&amp;*()_+~</string>
     <string name="sample_alphabet">aoei uübpmf dtnlgkhjqx zhchshr zcsyw</string>
 
