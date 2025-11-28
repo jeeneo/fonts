@@ -1,7 +1,7 @@
 ## One UI 8 rootless font installer
 
 > [!IMPORTANT]  
-> This app has been put under low-maintenance mode. Due to the restriction of Android by Google, I've decided to move away from Samsung and remove the Google's dependencies as well to not have to deal with the cat-and-mouse game that is Play Integrity.
+> This app has been put under low-maintenance mode. Due to the restriction of Android by Google, I've decided to move away from Samsung and most of Google's services to not deal with the cat-and-mouse game that is Play Integrity on my new device as it is rooted.
 > I have switched phones and no longer own a Samsung device to continue developing. This app should continue to work, and Samsung might even make an official way through GoodLock. Appologies.
 
 <div align="center">
