@@ -80,7 +80,7 @@ private fun getRandomSimpleText(context: Context): String {
             }
         } catch (_: Exception) {}
     }
-    return simpleTexts.firstOrNull() ?: "sample text"
+    return simpleTexts.randomOrNull() ?: "sample text"
 }
 
 @Composable
