@@ -69,10 +69,15 @@ sealed class Screen(val route: String, val titleRes: Int) {
 
 private fun getRandomSimpleText(context: Context): String {
     val simpleTexts = mutableListOf<String>()
-    listOf(
+    val locale = context.resources.configuration.locales.get(0)
+    val resIds = mutableListOf(
         R.string.sample_text_simple_1,
         R.string.sample_text_simple_2,
-    ).forEach { resId ->
+    )
+    if (locale.language == "en") {
+        resIds.add(R.string.sample_text_simple_3)
+    }
+    resIds.forEach { resId ->
         try {
             val text = context.getString(resId)
             if (text.isNotEmpty()) {
