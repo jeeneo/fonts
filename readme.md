@@ -1,4 +1,8 @@
-## One UI 8 rootless font changer
+## One UI 8 rootless font installer
+
+> [!IMPORTANT]  
+> This app has been put under low-maintenance mode.
+> I have switched phones and no longer own a Samsung device to continue developing.
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 

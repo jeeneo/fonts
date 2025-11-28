@@ -71,7 +71,6 @@ private fun getRandomSimpleText(context: Context): String {
     val simpleTexts = mutableListOf<String>()
     val locale = context.resources.configuration.locales[0]
     val isEnglish = locale.language == "en"
-    
     listOf(
         R.string.sample_text_simple_1,
         R.string.sample_text_simple_2,
