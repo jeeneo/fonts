@@ -1,7 +1,7 @@
 ## One UI 8 rootless font installer
 
 > [!IMPORTANT]  
-> This app has been put under low-maintenance mode, I no longer own a Samsung device any longer to continue developing
+> This app has been put under low-maintenance mode, I no longer own a Samsung device to continue developing
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
