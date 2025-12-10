@@ -13,12 +13,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -37,7 +37,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import rikka.shizuku.Shizuku
 import java.io.FileOutputStream
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.Color
@@ -49,14 +48,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.TextView
 import androidx.compose.ui.graphics.toArgb
 import android.util.TypedValue
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.graphics.createBitmap
 import com.je.fontsmanager.samsung.R
@@ -511,23 +508,46 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
     val fontName = sharedState.selectedFontName
     val boldTypeface = sharedState.boldPreviewTypeface
     val boldFontName = sharedState.selectedBoldFontName
-    
+
+    var selectedStyle by remember { mutableStateOf(PreviewStyle.Regular) }
     var customText by remember { mutableStateOf("") }
     var textSize by remember { mutableStateOf(24f) }
-    var showBoldPreview by remember { mutableStateOf(false) }
-    
+
     val context = LocalContext.current
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
     val defaultSampleText = remember { getRandomSimpleText(context) }
     val simpleSampleText = remember { getRandomSimpleText(context) }
-    
+
+    // Helper to derive the proper typeface for the selected style
+    fun deriveTypeface(
+        base: AndroidTypefaceLegacy?,
+        bold: AndroidTypefaceLegacy?
+    ): AndroidTypefaceLegacy? {
+        if (base == null) return null
+        // Prefer provided bold typeface for bold styles
+        val useTf = if (selectedStyle.prefersBoldTf && bold != null) bold else base
+        // On API 28+, Typeface.create(Typeface, weight, italic) exists; we call it via reflection-safe signature
+        return try {
+            AndroidTypefaceLegacy.create(useTf, selectedStyle.weight, selectedStyle.italic)
+        } catch (_: Throwable) {
+            // Fallback to older style mapping
+            val styleConst = when {
+                selectedStyle.weight >= 700 && selectedStyle.italic -> android.graphics.Typeface.BOLD_ITALIC
+                selectedStyle.weight >= 700 -> android.graphics.Typeface.BOLD
+                selectedStyle.italic -> android.graphics.Typeface.ITALIC
+                else -> android.graphics.Typeface.NORMAL
+            }
+            AndroidTypefaceLegacy.create(useTf, styleConst)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(fontName ?: androidx.compose.ui.res.stringResource(R.string.dialog_font_preview_title)) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = androidx.compose.ui.res.stringResource(R.string.button_back))
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = androidx.compose.ui.res.stringResource(R.string.button_back))
                     }
                 }
             )
@@ -584,43 +604,56 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
                     maxLines = 3
                 )
                 Spacer(Modifier.height(16.dp))
-                if (boldTypeface != null) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            androidx.compose.ui.res.stringResource(R.string.preview_show_bold),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Switch(
-                            checked = showBoldPreview,
-                            onCheckedChange = { showBoldPreview = it }
-                        )
+
+                // Style selector (segmented buttons)
+                Text("Style", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    val items = PreviewStyle.entries
+                    items.forEachIndexed { index, style ->
+                        SegmentedButton(
+                            selected = selectedStyle == style,
+                            onClick = { selectedStyle = style },
+                            shape = SegmentedButtonDefaults.itemShape(index, items.size),
+                            modifier = Modifier.weight(1f).height(40.dp)
+                        ) {
+                            Text(
+                                style.label,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
                     }
-                    if (showBoldPreview && boldFontName != null) {
-                        Text(
-                            boldFontName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Spacer(Modifier.height(16.dp))
                 }
+
+                val currentTypeface = deriveTypeface(previewTypeface, boldTypeface)
+                Spacer(Modifier.height(16.dp))
+
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
+                        val header = when (selectedStyle) {
+                            PreviewStyle.Regular -> stringResource(R.string.label_regular_variant)
+                            PreviewStyle.Italic -> stringResource(R.string.label_italic_variant)
+                            PreviewStyle.Medium -> stringResource(R.string.label_medium_variant)
+                            PreviewStyle.MediumItalic -> stringResource(R.string.label_medium_variant) + " " + androidx.compose.ui.res.stringResource(R.string.label_italic_variant)
+                            PreviewStyle.Bold, PreviewStyle.BoldItalic -> stringResource(R.string.preview_bold_variant)
+                        }
                         Text(
-                            if (showBoldPreview && boldTypeface != null) 
-                                androidx.compose.ui.res.stringResource(R.string.preview_bold_variant) 
-                            else 
-                                androidx.compose.ui.res.stringResource(R.string.preview_regular),
+                            header,
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.primary
                         )
+                        if ((selectedStyle == PreviewStyle.Bold || selectedStyle == PreviewStyle.BoldItalic) && boldFontName != null) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                boldFontName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                         Spacer(Modifier.height(12.dp))
                         val displayText = customText.ifBlank { defaultSampleText }
-                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
                         AndroidView(
                             factory = { ctx ->
                                 TextView(ctx).apply {
@@ -649,11 +682,7 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(12.dp))
-                        
-                        // val alphabetText = "ABCDEFGHIJKLMNOPQRSTUVWXYZ\nabcdefghijklmnopqrstuvwxyz"
-                        val alphabetText = androidx.compose.ui.res.stringResource(R.string.sample_alphabet)
-                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
-                        
+                        val alphabetText = stringResource(R.string.sample_alphabet)
                         AndroidView(
                             factory = { ctx ->
                                 TextView(ctx).apply {
@@ -681,10 +710,7 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
                             color = MaterialTheme.colorScheme.primary
                         )
                         Spacer(Modifier.height(12.dp))
-                        
                         val numbersText = "0123456789\n!@#\$%^&*()_+-=[]{}|;':\",./<>?"
-                        val currentTypeface = if (showBoldPreview && boldTypeface != null) boldTypeface else previewTypeface
-                        
                         AndroidView(
                             factory = { ctx ->
                                 TextView(ctx).apply {

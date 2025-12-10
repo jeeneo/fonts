@@ -73,4 +73,10 @@
     <string name="toast_uninstall_failed">Uninstall failed</string>
     <string name="toast_permission_granted">Permission granted</string>
     <string name="toast_permission_denied">Permission denied</string>
+
+    <string name="label_regular_variant">Regular</string>
+    <string name="label_italic_variant">Italic</string>
+    <string name="label_bold_italic_variant">Bold italic</string>
+    <string name="label_medium_variant">Medium</string>
+    <string name="label_light_variant">Light</string>
 </resources>

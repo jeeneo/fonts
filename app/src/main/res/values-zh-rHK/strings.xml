@@ -76,4 +76,10 @@
     <string name="toast_uninstall_failed">解除安裝失敗</string>
     <string name="toast_permission_granted">權限已授予</string>
     <string name="toast_permission_denied">權限被拒絕</string>
+
+    <string name="label_regular_variant">一般</string>
+    <string name="label_italic_variant">斜體</string>
+    <string name="label_bold_italic_variant">粗斜體</string>
+    <string name="label_medium_variant">中等</string>
+    <string name="label_light_variant">細體</string>
 </resources>
