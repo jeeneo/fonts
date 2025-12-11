@@ -64,7 +64,8 @@
     <string name="sample_text_simple_1">etaoin shrdlu</string>
     <string name="sample_text_simple_2">The quick brown fox jumps over the lazy dog</string>
     <string name="sample_text_simple_3">Sphinx of black quartz, judge my vow</string>
-    <string name="sample_text_complex">Cwm, fjord-bank glyphs vext quiz\n\n1234567890\n\n!@#$%^&amp;*()_+~</string>
+    <string name="sample_text_simple_4">Cwm, fjord-bank glyphs vext quiz</string>
+    <!-- <string name="sample_text_complex">Cwm, fjord-bank glyphs vext quiz\n\n1234567890\n\n!@#$%^&amp;*()_+~</string> -->
     <string name="sample_alphabet">ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz</string>
     
     <string name="error_font_preview">Could not load font preview</string>

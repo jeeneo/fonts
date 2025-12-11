@@ -53,7 +53,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.graphics.createBitmap
 import com.je.fontsmanager.samsung.R
@@ -70,9 +69,10 @@ private fun getRandomSimpleText(context: Context): String {
     val resIds = mutableListOf(
         R.string.sample_text_simple_1,
         R.string.sample_text_simple_2,
+        R.string.sample_text_simple_3,
     )
     if (locale.language == "en") {
-        resIds.add(R.string.sample_text_simple_3)
+        resIds.add(R.string.sample_text_simple_4)
     }
     resIds.forEach { resId ->
         try {
@@ -83,16 +83,6 @@ private fun getRandomSimpleText(context: Context): String {
         } catch (_: Exception) {}
     }
     return simpleTexts.randomOrNull() ?: "sample text"
-}
-
-@Composable
-private fun sampleText(includeNumbers: Boolean = false): String {
-    val context = LocalContext.current
-    return if (includeNumbers) {
-        androidx.compose.ui.res.stringResource(R.string.sample_text_complex)
-    } else {
-        remember { getRandomSimpleText(context) }
-    }
 }
 
 private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, initialText: String) =
@@ -366,13 +356,13 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                             Text(selectedFontName!!, style = MaterialTheme.typography.bodyLarge)
                             Spacer(Modifier.height(8.dp))
                             if (previewTypeface != null) {
-                                val previewText = sampleText(false)
+                                val previewText = getRandomSimpleText(LocalContext.current)
                                 AndroidView(
                                     factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor, previewText).also { Log.d("FontInstaller", "Creating preview TextView with typeface") } },
                                     update = { tv -> tv.typeface = previewTypeface; tv.text = previewText; tv.setTextColor(onSurfaceColor) },
                                     modifier = Modifier.fillMaxWidth()
                                 )
-                            } else Text(sampleText(false), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+                            } else Text(getRandomSimpleText(LocalContext.current), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
                         }
                         Spacer(Modifier.height(8.dp))
                         Text(androidx.compose.ui.res.stringResource(R.string.label_display_name, displayName), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -605,16 +595,36 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
                 )
                 Spacer(Modifier.height(16.dp))
 
-                // Style selector (segmented buttons)
+                // Style selector (segmented buttons) - two rows
                 Text("Style", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(8.dp))
+                val regularRow = listOf(PreviewStyle.Regular, PreviewStyle.Medium, PreviewStyle.Bold) // regular styles
+                val italicRow = listOf(PreviewStyle.Italic, PreviewStyle.MediumItalic, PreviewStyle.BoldItalic) // italicized styles
+
                 SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    val items = PreviewStyle.entries
-                    items.forEachIndexed { index, style ->
+                    regularRow.forEachIndexed { index, style ->
                         SegmentedButton(
                             selected = selectedStyle == style,
                             onClick = { selectedStyle = style },
-                            shape = SegmentedButtonDefaults.itemShape(index, items.size),
+                            shape = SegmentedButtonDefaults.itemShape(index, regularRow.size),
+                            modifier = Modifier.weight(1f).height(40.dp)
+                        ) {
+                            Text(
+                                style.label,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    italicRow.forEachIndexed { index, style ->
+                        SegmentedButton(
+                            selected = selectedStyle == style,
+                            onClick = { selectedStyle = style },
+                            shape = SegmentedButtonDefaults.itemShape(index, italicRow.size),
                             modifier = Modifier.weight(1f).height(40.dp)
                         ) {
                             Text(
@@ -848,7 +858,7 @@ fun SettingsScreen() {
                                         Text(pkg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         fontTypefaces[pkg]?.let { tf ->
                                             Spacer(Modifier.height(4.dp))
-                                            val previewText = sampleText(false)
+                                            val previewText = getRandomSimpleText(LocalContext.current)
                                             AndroidView(
                                                 factory = { ctx -> makeSampleTextView(ctx, 14f, onSurfaceColor, previewText) },
                                                 update = { tv -> tv.typeface = tf; tv.text = previewText; tv.setTextColor(onSurfaceColor) },

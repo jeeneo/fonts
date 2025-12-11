@@ -1,6 +1,6 @@
 package com.je.fontsmanager.samsung.ui
 
-enum class PreviewStyle(
+enum class PreviewStyle( // note on enums, see https://developer.android.com/topic/performance/reduce-apk-size#remove-enums
     val label: String,
     val weight: Int,
     val italic: Boolean,
