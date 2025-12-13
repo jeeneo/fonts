@@ -13,8 +13,8 @@ android {
         applicationId = "com.je.fontsmanager.samsung"
         minSdk = 36
         targetSdk = 36
-        versionCode = 140
-        versionName = "1.4"
+        versionCode = 150
+        versionName = "1.5"
     }
     buildTypes {
         release {
