@@ -1,7 +1,7 @@
-## One UI 8 rootless font installer
+## Font installer
 
 > [!IMPORTANT]  
-> This app has been put under low-maintenance mode, I no longer own a Samsung device to continue developing
+> This app has been put under maintenance-only mode. I no longer own a Samsung device to guarantee it will work. 
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
@@ -19,14 +19,24 @@
   </p>
 </div>
 
-my attempt to stay relevant and reverse engineer how one might add custom fonts on Samsung devices without root (OneUI 8)
+<!-- whelp looks like we gotta make a proper readme, maybe focus on making a proper app too lol -->
 
-zFont sucks with its ADS (it seems like its the only other app that can do this besides the one i based this off of, i just did it here for only for Samsung, other devices not supported)
+Install fonts on One UI 8 without root
 
-its kinda thrown together (look its text replacement instead of apk decompiling)
+It's like zFont, but if it was ad-free, open source, heavily limited, offline and completely manual. And only supported Samsung One UI 8. Cool!
 
-basically an unsigned stub apk is built alongside then search-and-replacement is used to change the name and ID
+It can:
+- install fonts (ttf only)
+- uninstall fonts (le gasp)
+- preview fonts (woah getting dizzy from the features)
+- use shizuku (not required but simplifies installs)
 
-apk in release
+It can't:
+- work on anything prior to One UI 8 or non-samsung phones
+- fold your dishes
+- wash your cat
 
-supports shizuku
+It won't:
+- support anything other than One UI 8 (not planned)
+
+(cat washing support is planned™ /s /j)
