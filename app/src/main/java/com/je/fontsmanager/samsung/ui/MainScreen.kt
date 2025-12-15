@@ -109,6 +109,7 @@ fun MainScreen() {
     val currentRoute = navBackStackEntry?.destination?.route
     val homeScreenState = remember { HomeScreenState() }
     Scaffold(
+        contentWindowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Bottom),
         bottomBar = {
             if (currentRoute != Screen.FontPreview.route) {
                 NavigationBar {
@@ -126,12 +127,7 @@ fun MainScreen() {
             }
         }
     ) { innerPadding ->
-        val navHostPadding = if (currentRoute == Screen.FontPreview.route) {
-            PaddingValues(0.dp)
-        } else {
-            innerPadding
-        }
-        NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(navHostPadding)) {
+        NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
             composable(Screen.Home.route) { HomeScreen(navController, homeScreenState) }
             composable(Screen.Settings.route) { SettingsScreen() }
             composable(Screen.FontPreview.route) { FontPreviewScreen(navController, homeScreenState) }
@@ -330,7 +326,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
     }
 
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -822,7 +818,7 @@ fun SettingsScreen() {
         }
     }
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface.toArgb()
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState())) {
             Text(androidx.compose.ui.res.stringResource(R.string.title_manage), style = MaterialTheme.typography.headlineLarge, modifier = Modifier.padding(bottom = 16.dp))
             ElevatedCard(Modifier.fillMaxWidth()) {
