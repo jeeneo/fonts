@@ -1,7 +1,7 @@
 ## Fonts manager
 
-> [!IMPORTANT]  
-> This app has been put under maintenance-only mode. I no longer own a Samsung device to guarantee it will work. 
+> [!IMPORTANT]
+> This app has been put under low-maintenance. I no longer own a Samsung device to guarantee it will work. 
 
 <div align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
@@ -23,7 +23,7 @@
 
 Install fonts on One UI 8 without root
 
-It's like zFont, but if it was ad-free, open source, heavily limited, offline and completely manual. And only supported Samsung One UI 8. Cool!
+It's like zFont, but if it was ad-free, open source, heavily limited, offline and completely manual. And only supported One UI 8. Cool!
 
 It can:
 - install fonts (ttf only)
@@ -39,4 +39,4 @@ It can't:
 It won't:
 - support anything other than One UI 8 (not planned)
 
-(cat washing support is planned™ /s /j)
+(cat washing support is planned™ /s /j) <!-- meow :3 -->
