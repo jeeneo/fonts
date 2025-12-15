@@ -1,4 +1,4 @@
-## Font installer
+## Fonts manager
 
 > [!IMPORTANT]  
 > This app has been put under maintenance-only mode. I no longer own a Samsung device to guarantee it will work. 
