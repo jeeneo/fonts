@@ -14,7 +14,7 @@ android {
         minSdk = 36
         targetSdk = 36
         versionCode = 160
-        versionName = "1.6.0"
+        versionName = "1.6.0-beta"
     }
     buildTypes {
         release {

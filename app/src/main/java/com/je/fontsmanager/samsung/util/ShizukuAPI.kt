@@ -90,6 +90,7 @@ object ShizukuAPI {
         }
     }
 
+    // under no circumstances should this function be altered or use any other API
     fun installApk(apkFile: File, fallback: (File) -> Unit): Boolean {
         if (!apkFile.exists() || apkFile.length() == 0L) return false
         return try {

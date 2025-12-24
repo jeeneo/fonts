@@ -26,7 +26,7 @@ Install fonts on One UI 8 without root
 It's like zFont, but if it was ad-free, open source, heavily limited, offline and completely manual. And only supported One UI 8. Cool!
 
 > [!WARNING]
-> I've seen around that this does not work on One UI 8.5. Due to the fact I don't have a Samsung device to test this personally, leave an [issue](https://github.com/jeeneo/fonts/issues/new/choose) regarding this.
+> This does not work on One UI 8.5. Due to the fact I don't have a Samsung device to test this personally, we have an open [issue](https://github.com/jeeneo/fonts/issues/9) to track this, but don't expect a fix anytime soon.
 
 It can:
 - install fonts (ttf only)

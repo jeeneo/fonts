@@ -3,6 +3,8 @@ package com.je.fontsmanager.samsung.ui
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
@@ -52,6 +54,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.graphics.createBitmap
@@ -92,22 +95,12 @@ private fun makeSampleTextView(ctx: Context, textSizeSp: Float, textColor: Int, 
         setTextColor(textColor)
     }
 
-class HomeScreenState {
-    var selectedFontFile by mutableStateOf<File?>(null)
-    var selectedFontName by mutableStateOf<String?>(null)
-    var selectedBoldFontFile by mutableStateOf<File?>(null)
-    var selectedBoldFontName by mutableStateOf<String?>(null)
-    var displayName by mutableStateOf("")
-    var previewTypeface by mutableStateOf<AndroidTypefaceLegacy?>(null)
-    var boldPreviewTypeface by mutableStateOf<AndroidTypefaceLegacy?>(null)
-}
-
 @Composable
 fun MainScreen() {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    val homeScreenState = remember { HomeScreenState() }
+    val homeViewModel: HomeViewModel = viewModel()
     Scaffold(
         contentWindowInsets = WindowInsets.systemBars.only(WindowInsetsSides.Bottom),
         bottomBar = {
@@ -128,55 +121,46 @@ fun MainScreen() {
         }
     ) { innerPadding ->
         NavHost(navController, startDestination = Screen.Home.route, modifier = Modifier.padding(innerPadding)) {
-            composable(Screen.Home.route) { HomeScreen(navController, homeScreenState) }
+            composable(Screen.Home.route) { HomeScreen(navController, homeViewModel) }
             composable(Screen.Settings.route) { SettingsScreen() }
-            composable(Screen.FontPreview.route) { FontPreviewScreen(navController, homeScreenState) }
+            composable(Screen.FontPreview.route) { FontPreviewScreen(navController, homeViewModel) }
         }
     }
 }
 
 @Composable
-fun HomeScreen(navController: androidx.navigation.NavController, sharedState: HomeScreenState) {
+fun HomeScreen(navController: androidx.navigation.NavController, sharedState: HomeViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val selectedFontFile = sharedState.selectedFontFile
+    val selectedFontName = sharedState.selectedFontName
+    val selectedBoldFontFile = sharedState.selectedBoldFontFile
+    val selectedBoldFontName = sharedState.selectedBoldFontName
+    val displayName = sharedState.displayName
+    val previewTypeface = sharedState.previewTypeface
+    val boldPreviewTypeface = sharedState.boldPreviewTypeface
 
-    var selectedFontFile by sharedState::selectedFontFile
-    var selectedFontName by sharedState::selectedFontName
-    var selectedBoldFontFile by sharedState::selectedBoldFontFile
-    var selectedBoldFontName by sharedState::selectedBoldFontName
-    var displayName by sharedState::displayName
-    var previewTypeface by sharedState::previewTypeface
-    var boldPreviewTypeface by sharedState::boldPreviewTypeface
+    LaunchedEffect(sharedState.lastErrorMessage) {
+        sharedState.lastErrorMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            sharedState.clearError()
+        }
+    }
     
     var isProcessing by remember { mutableStateOf(false) }
     var showNameDialog by remember { mutableStateOf(false) }
     var showInstructionsDialog by remember { mutableStateOf(false) }
     var pendingInstallPackage by remember { mutableStateOf<String?>(null) }
     var awaitingInstallResult by remember { mutableStateOf(false) }
+    var pendingApkFile by remember { mutableStateOf<File?>(null) }
     var showFontDropdown by remember { mutableStateOf(false) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                val excludeFiles = listOfNotNull(selectedFontFile, selectedBoldFontFile)
+                    val excludeFiles = listOfNotNull(sharedState.selectedFontFile, sharedState.selectedBoldFontFile)
                 CacheCleanupUtils.cleanup(context.cacheDir, excludeFiles)
-                if (awaitingInstallResult) {
-                    val pkgName = pendingInstallPackage
-                    if (pkgName != null) {
-                        scope.launch {
-                            delay(300)
-                            val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-                            if (installed) {
-                                isProcessing = false
-                                awaitingInstallResult = false
-                                Toast.makeText(context, context.getString(R.string.toast_install_succeeded), Toast.LENGTH_SHORT).show()
-                                pendingInstallPackage = null
-                                CacheCleanupUtils.cleanup(context.cacheDir)
-                            }
-                        }
-                    }
-                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -186,25 +170,47 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
     }
 
     val installLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        scope.launch {
-            val pkgName = pendingInstallPackage
-            if (pkgName != null) {
-                delay(300)
-                val installed = FontInstallerUtils.isAppInstalled(context, pkgName)
-                isProcessing = false
-                awaitingInstallResult = false
-                if (installed) {
-                    Toast.makeText(context, context.getString(R.string.toast_install_succeeded), Toast.LENGTH_SHORT).show()
-                } else {
-                    if (result.resultCode == Activity.RESULT_CANCELED) {
-                        Toast.makeText(context, context.getString(R.string.toast_install_cancelled), Toast.LENGTH_SHORT).show()
+        val pkgName = pendingInstallPackage
+        if (pkgName == null) {
+            isProcessing = false
+            awaitingInstallResult = false
+            return@rememberLauncherForActivityResult
+        }
+        if (result.resultCode == Activity.RESULT_CANCELED) {
+            isProcessing = false
+            awaitingInstallResult = false
+            Toast.makeText(context, context.getString(R.string.toast_install_cancelled), Toast.LENGTH_SHORT).show()
+            pendingInstallPackage = null
+        }
+    }
+
+    DisposableEffect(awaitingInstallResult, pendingInstallPackage) {
+        val pkg = pendingInstallPackage
+        if (awaitingInstallResult && pkg != null) {
+            val receiver = object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context?, intent: Intent?) {
+                    if (intent?.action == Intent.ACTION_PACKAGE_ADDED) {
+                        val added = intent.data?.schemeSpecificPart
+                        if (added == pkg) {
+                            try { if (pendingInstallPackage == pkg) { pendingApkFile?.let { try { it.delete() } catch (_: Exception) {} }; pendingApkFile = null } } catch (_: Exception) {}
+                            isProcessing = false
+                            awaitingInstallResult = false
+                            Toast.makeText(context, context.getString(R.string.toast_install_succeeded), Toast.LENGTH_SHORT).show()
+                            pendingInstallPackage = null
+                            try {
+                                context.unregisterReceiver(this)
+                            } catch (_: Exception) {}
+                        }
                     }
                 }
-                pendingInstallPackage = null
-            } else {
-                isProcessing = false
-                awaitingInstallResult = false
             }
+            val filter = IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") }
+            try { context.registerReceiver(receiver, filter) } catch (_: Exception) {}
+            onDispose {
+                try { context.unregisterReceiver(receiver) } catch (_: Exception) {}
+            }
+        } else {
+            onDispose {}
         }
     }
 
@@ -216,26 +222,26 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                 return@let
             }
             try { selectedFontFile?.delete() } catch (_: Exception) {}
-            previewTypeface = null
-            val cachedFile = File(context.cacheDir, "temp_${System.currentTimeMillis()}.ttf")
+            val baseName = fileName.removeSuffix(".ttf").replace(Regex("[^a-zA-Z0-9]"), "")
+            val cachedFile = File(context.cacheDir, "${baseName}.ttf")
+
             val success = try {
                 context.contentResolver.openInputStream(it)?.use { input ->
                     FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
-                }; true
+                }
+                true
             } catch (e: Exception) {
-                Log.e("FontInstaller", "Failed to cache font", e); false
+                Log.e("FontInstaller", "Failed to cache font", e)
+                false
             }
             if (success) {
-                selectedFontFile = cachedFile
-                selectedFontName = fileName
-                displayName = fileName.removeSuffix(".ttf")
-                try {
-                    previewTypeface = AndroidTypefaceLegacy.createFromFile(cachedFile)
-                } catch (e: Exception) {
-                    Log.e("FontInstaller", "Failed to load font preview", e)
-                    previewTypeface = null
-                }
-            } else Toast.makeText(context, context.getString(R.string.toast_failed_to_save), Toast.LENGTH_SHORT).show()
+                try { pendingApkFile?.let { try { it.delete() } catch (_: Exception) {} }; pendingApkFile = null } catch (_: Exception) {}
+                sharedState.setSelectedFontFile(cachedFile, fileName)
+                sharedState.updateDisplayName(fileName.removeSuffix(".ttf"))
+                sharedState.clearError()
+            } else {
+                Toast.makeText(context, context.getString(R.string.toast_failed_to_save), Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -246,25 +252,27 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                 Toast.makeText(context, context.getString(R.string.toast_only_ttf_supported), Toast.LENGTH_SHORT).show()
                 return@let
             }
-            try { selectedBoldFontFile?.delete() } catch (_: Exception) {}
-            val cachedFile = File(context.cacheDir, "temp_bold_${System.currentTimeMillis()}.ttf")
+            sharedState.clearSelectedBold()
+            val baseName = fileName.removeSuffix(".ttf").replace(Regex("[^a-zA-Z0-9]"), "")
+            val cachedFile = File(context.cacheDir, "${baseName}_bold.ttf")
+
             val success = try {
                 context.contentResolver.openInputStream(it)?.use { input ->
                     FileOutputStream(cachedFile).use { output -> input.copyTo(output) }
-                }; true
-            } catch (e: Exception) {
-                Log.e("FontInstaller", "Failed to cache bold font", e); false
-            }
-            if (success) {
-                selectedBoldFontFile = cachedFile
-                selectedBoldFontName = fileName
-                try {
-                    boldPreviewTypeface = AndroidTypefaceLegacy.createFromFile(cachedFile)
-                } catch (e: Exception) {
-                    Log.e("FontInstaller", "Failed to load bold font preview", e)
-                    boldPreviewTypeface = null
                 }
-            } else Toast.makeText(context, context.getString(R.string.toast_failed_to_save_bold), Toast.LENGTH_SHORT).show()
+                true
+            } catch (e: Exception) {
+                Log.e("FontInstaller", "Failed to cache bold font", e)
+                false
+            }
+
+            if (success) {
+                try { pendingApkFile?.let { try { it.delete() } catch (_: Exception) {} }; pendingApkFile = null } catch (_: Exception) {}
+                sharedState.setSelectedBoldFontFile(cachedFile, fileName)
+                sharedState.clearError()
+            } else {
+                Toast.makeText(context, context.getString(R.string.toast_failed_to_save_bold), Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
@@ -277,16 +285,16 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                 onAlreadyInstalled = {
                     isProcessing = false; awaitingInstallResult = false; pendingInstallPackage = null
                     Toast.makeText(context, context.getString(R.string.toast_already_installed), Toast.LENGTH_LONG).show()
-                    CacheCleanupUtils.cleanup(context.cacheDir)
                 },
                 onComplete = { success ->
                     if (ShizukuAPI.isUsable()) {
                         isProcessing = false; awaitingInstallResult = false
                         Toast.makeText(context, context.getString(if (FontInstallerUtils.isAppInstalled(context, pkgName) && success) R.string.toast_install_succeeded else R.string.toast_install_failed), Toast.LENGTH_SHORT).show()
-                        pendingInstallPackage = null; CacheCleanupUtils.cleanup(context.cacheDir)
+                        pendingInstallPackage = null
                     }
                 },
-                boldTtfFile = selectedBoldFontFile
+                boldTtfFile = selectedBoldFontFile,
+                onRegisterPending = { _, file -> pendingApkFile = file }
             )
         }
     }
@@ -299,7 +307,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                 Column {
                     Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_message))
                     Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(displayName, { if (it.length <= 50) displayName = it },
+                    OutlinedTextField(displayName, { if (it.length <= 50) sharedState.updateDisplayName(it) },
                         label = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_hint)) },
                         singleLine = true, isError = displayName.length > 50,
                         supportingText = { Text(androidx.compose.ui.res.stringResource(R.string.dialog_customize_name_counter, displayName.length)) })
@@ -412,10 +420,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
                             { Text(androidx.compose.ui.res.stringResource(R.string.menu_remove_bold)) },
                             {
                                 showFontDropdown = false
-                                try { selectedBoldFontFile?.delete() } catch (_: Exception) {}
-                                selectedBoldFontFile = null
-                                selectedBoldFontName = null
-                                boldPreviewTypeface = null
+                                sharedState.clearSelectedBold()
                             },
                             leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) }
                         )
@@ -489,7 +494,7 @@ fun HomeScreen(navController: androidx.navigation.NavController, sharedState: Ho
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedState: HomeScreenState) {
+fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedState: HomeViewModel) {
     val previewTypeface = sharedState.previewTypeface
     val fontName = sharedState.selectedFontName
     val boldTypeface = sharedState.boldPreviewTypeface
@@ -591,7 +596,7 @@ fun FontPreviewScreen(navController: androidx.navigation.NavController, sharedSt
                 )
                 Spacer(Modifier.height(16.dp))
 
-                // Style selector (segmented buttons) - two rows
+                // style selector (segmented buttons) - two rows
                 Text("Style", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(8.dp))
                 val regularRow = listOf(PreviewStyle.Regular, PreviewStyle.Medium, PreviewStyle.Bold) // regular styles
@@ -782,7 +787,6 @@ fun SettingsScreen() {
     val uninstallLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { 
         scope.launch {
             delay(500)
-            CacheCleanupUtils.cleanup(context.cacheDir)
             refreshFonts()
         }
     }
@@ -803,10 +807,10 @@ fun SettingsScreen() {
                 try {
                     val appInfo = context.packageManager.getApplicationInfo(pkg, 0)
                     val apkFile = File(appInfo.sourceDir)
-                    val ttfFile = FontInstallerUtils.extractFontPreview(apkFile, context.cacheDir)
+                    val ttfFile = withContext(Dispatchers.IO) { FontInstallerUtils.extractFontPreview(apkFile, context.cacheDir) }
                     if (ttfFile != null) {
                         extractedPreviewFiles[pkg] = ttfFile
-                        val tf = AndroidTypefaceLegacy.createFromFile(ttfFile)
+                        val tf = try { withContext(Dispatchers.IO) { AndroidTypefaceLegacy.createFromFile(ttfFile) } } catch (_: Exception) { null }
                         fontTypefaces[pkg] = tf
                     } else {
                         fontTypefaces[pkg] = null
@@ -866,7 +870,7 @@ fun SettingsScreen() {
                                             if (ShizukuAPI.shouldUseShizuku(context)) {
                                                 val success = ShizukuAPI.uninstall(pkg)
                                                 Toast.makeText(context, context.getString(if (success) R.string.toast_uninstalled else R.string.toast_uninstall_failed), Toast.LENGTH_SHORT).show()
-                                                if (success) { CacheCleanupUtils.cleanup(context.cacheDir); delay(500); refreshFonts() }
+                                                if (success) { delay(500); refreshFonts() }
                                             } else {
                                                 uninstallLauncher.launch(Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply { data = Uri.parse("package:$pkg") })
                                             }
@@ -930,26 +934,48 @@ object FontInstallerUtils {
         installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>,
         onAlreadyInstalled: () -> Unit,
         onComplete: (Boolean) -> Unit = {},
-        boldTtfFile: File? = null
+        boldTtfFile: File? = null,
+        onRegisterPending: (String, File) -> Unit = { _, _ -> }
     ) = withContext(Dispatchers.IO) {
         val outputApk = File(context.cacheDir, "signed_${System.currentTimeMillis()}.apk")
+        var packageNameForCleanup: String? = null
         try {
             val fontName = displayName.replace(Regex("[^a-zA-Z0-9]"), "")
-            val config = FontBuilder.FontConfig(displayName = displayName, fontName = fontName, ttfFile = ttfFile, boldTtfFile = boldTtfFile)
+            if (!ttfFile.exists()) {
+                Log.e(TAG, "TTF file does not exist: ${'$'}{ttfFile.absolutePath}")
+                withContext(Dispatchers.Main) { onComplete(false) }
+                return@withContext
+            }
+            if (boldTtfFile != null && !boldTtfFile.exists()) {
+                Log.e(TAG, "Bold TTF file does not exist: ${'$'}{boldTtfFile.absolutePath}")
+                withContext(Dispatchers.Main) { onComplete(false) }
+                return@withContext
+            }
+            val config = FontBuilder.FontConfig(
+                displayName = displayName,
+                fontName = fontName,
+                ttfFile = ttfFile,
+                boldTtfFile = boldTtfFile
+            )
+            packageNameForCleanup = config.packageName
             if (isAppInstalled(context, config.packageName)) {
                 withContext(Dispatchers.Main) { onAlreadyInstalled() }
                 return@withContext
             }
-
             if (!FontBuilder.buildAndSignFontApk(context, config, outputApk)) {
                 Log.e(TAG, "buildAndSignFontApk failed")
+                try { CacheCleanupUtils.deleteFiles(outputApk) } catch (_: Exception) {}
                 withContext(Dispatchers.Main) { onComplete(false) }
                 return@withContext
             }
+            try {
+                onRegisterPending(config.packageName, outputApk)
+            } catch (_: Exception) {}
             if (ShizukuAPI.isUsable()) {
                 val success = ShizukuAPI.installApk(outputApk) { fallbackApk ->
                     ShizukuAPI.fallbackInstall(context, fallbackApk)
                 }
+                try { CacheCleanupUtils.deleteFiles(outputApk) } catch (_: Exception) {}
                 withContext(Dispatchers.Main) { onComplete(success) }
             } else {
                 withContext(Dispatchers.Main) {
@@ -958,11 +984,8 @@ object FontInstallerUtils {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error installing font", e)
+            try { CacheCleanupUtils.deleteFiles(outputApk) } catch (_: Exception) {}
             withContext(Dispatchers.Main) { onComplete(false) }
-        } finally {
-            if (ShizukuAPI.isUsable()) {
-                try { outputApk.delete() } catch (_: Exception) {}
-            }
         }
     }
 
@@ -973,6 +996,7 @@ object FontInstallerUtils {
         false
     }
 
+    // under no circumstances should this function be altered or use any other API
     private fun installApk(context: Context, apkFile: File, installLauncher: androidx.activity.result.ActivityResultLauncher<Intent>) {
         if (!apkFile.exists() || apkFile.length() == 0L) return
         val apkUri = FileProvider.getUriForFile(context, "${context.packageName}.provider", apkFile)
@@ -989,11 +1013,22 @@ object FontInstallerUtils {
             val zip = java.util.zip.ZipFile(apkFile)
             val entry = zip.entries().asSequence().firstOrNull { it.name.endsWith(".ttf", ignoreCase = true) }
             if (entry != null) {
-                val outFile = File(cacheDir, "font_preview_${apkFile.nameWithoutExtension}_${System.currentTimeMillis()}.ttf")
-                zip.getInputStream(entry).use { input ->
-                    FileOutputStream(outFile).use { output -> input.copyTo(output) }
+                val target = File(cacheDir, entry.name.substringAfterLast('/'))
+                if (target.exists() && target.length() > 0L) return target
+                val tmp = File(cacheDir, "${target.name}.tmp")
+                try {
+                    zip.getInputStream(entry).use { input ->
+                        FileOutputStream(tmp).use { output -> input.copyTo(output) }
+                    }
+                    if (!tmp.renameTo(target)) {
+                        tmp.copyTo(target, overwrite = true)
+                        tmp.delete()
+                    }
+                } catch (e: Exception) {
+                    try { tmp.delete() } catch (_: Exception) {}
+                    throw e
                 }
-                outFile
+                if (target.exists() && target.length() > 0L) target else null
             } else null
         } catch (_: Exception) {
             null
