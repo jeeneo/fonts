@@ -6,6 +6,7 @@
 > [!WARNING]
 > This does not work on One UI 8.5.
 
+<div align="center">
 <table>
 <tr>
 <td>
@@ -18,7 +19,6 @@
 </tr>
 </table>
 <p>
-<p align="center">
   <a href="https://apt.izzysoft.de/packages/com.je.fontsmanager.samsung"><img src="fastlane/githubassets/IzzyOnDroid.png" width="220" alt="IzzyOnDroid"></a>
 </p>
   </p>
