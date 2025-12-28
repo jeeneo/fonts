@@ -10,11 +10,11 @@
 <tr>
 <td>
 <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
-    style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+    width="240">
 <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" 
-    style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+    width="240">
 <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03.png" 
-    style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+    width="240">
 </tr>
 </table>
 <p>
