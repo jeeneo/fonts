@@ -6,23 +6,26 @@
 > [!WARNING]
 > This does not work on One UI 8.5.
 
-<div align="center">
-<table>
+<table align="center">
 <tr>
-<td>
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
-    width="240">
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" 
-    width="240">
-<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03.png" 
-    width="240">
+<td align="center">
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" width="240">
+</td>
+<td align="center">
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" width="240">
+</td>
+<td align="center">
+<img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03.png" width="240">
+</td>
+</tr>
+<tr>
+<td colspan="3" align="center">
+<a href="https://apt.izzysoft.de/packages/com.je.fontsmanager.samsung">
+  <img src="fastlane/githubassets/IzzyOnDroid.png" width="220" alt="IzzyOnDroid">
+</a>
+</td>
 </tr>
 </table>
-<p>
-  <a href="https://apt.izzysoft.de/packages/com.je.fontsmanager.samsung"><img src="fastlane/githubassets/IzzyOnDroid.png" width="220" alt="IzzyOnDroid"></a>
-</p>
-  </p>
-</div>
 
 Install fonts on One UI 8 without root
 
