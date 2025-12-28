@@ -1,0 +1,25 @@
+## Fonts manager
+
+> [!IMPORTANT]
+> This app has been put under low-maintenance. I no longer own a Samsung device to guarantee it will work. 
+
+> [!WARNING]
+> This does not work on One UI 8.5.
+
+<div align="center">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01.png" 
+       style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02.png" 
+       style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03.png" 
+       style="width: 240px; max-width: 100%; height: auto; margin: 10px;" alt="">
+  <p>
+<p align="center">
+  <a href="https://apt.izzysoft.de/packages/com.je.fontsmanager.samsung"><img src="fastlane/githubassets/IzzyOnDroid.png" width="220" alt="IzzyOnDroid"></a>
+</p>
+  </p>
+</div>
+
+Install fonts on One UI 8 without root
+
+supports shizuku

@@ -1,0 +1,3 @@
+add Chinese language support (machine translated)
+clean up the UI
+cache fixes
