@@ -1,5 +1,14 @@
 ## Fonts manager
 
+> [!CAUTION]
+> The "Samsung Fonts Installer" app on the Play Store is NOT official! Do NOT download this version!
+> 
+> `https://play.google.com/store/apps/details?id=com.je.fontsmanager.samsung`
+>
+> Please be aware this violates the GPLv3 agreement that this apps source code is under.
+
+
+
 > [!IMPORTANT]
 > This app has been put under low-maintenance. I no longer own a Samsung device to guarantee it will work. 
 
